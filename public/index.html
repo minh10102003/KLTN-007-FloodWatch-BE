@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Bản đồ Ngập lụt TP.HCM</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        #map { height: 600px; width: 100%; }
+        .flood-popup { text-align: center; }
+    </style>
+</head>
+<body>
+    <h1>Hệ thống Cảnh báo Ngập nước Thời gian thực</h1>
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // Khởi tạo bản đồ tại trung tâm TP.HCM
+        const map = L.map('map').setView([10.776, 106.701], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+        // Lưu trữ markers để quản lý
+        const sensorMarkers = [];
+        const crowdMarkers = [];
+
+        // Hàm lấy dữ liệu từ API
+        async function updateMap() {
+            try {
+                // 1. Lấy dữ liệu từ Sensor (API mới có vị trí)
+                const resSensor = await fetch('/api/v1/flood-data');
+                const dataSensor = await resSensor.json();
+                
+                // 2. Lấy dữ liệu từ Người dân
+                const resCrowd = await fetch('/api/crowd-reports');
+                const dataCrowd = await resCrowd.json();
+
+                // Xóa các marker cũ trước khi vẽ mới
+                sensorMarkers.forEach(marker => map.removeLayer(marker));
+                crowdMarkers.forEach(marker => map.removeLayer(marker));
+                sensorMarkers.length = 0;
+                crowdMarkers.length = 0;
+
+                // Vẽ điểm từ Sensor (Màu xanh mặc định)
+                if (dataSensor.success && dataSensor.data) {
+                    dataSensor.data.forEach(point => {
+                        // Sử dụng tọa độ từ API (lat, lng từ bảng sensors)
+                        if (point.lat && point.lng) {
+                            const marker = L.marker([point.lat, point.lng]).addTo(map);
+                            marker.bindPopup(`
+                                <b>Trạm IoT: ${point.sensor_id}</b><br>
+                                Vị trí: ${point.location_name || 'N/A'}<br>
+                                Mức nước: ${point.water_level}cm<br>
+                                Lúc: ${new Date(point.created_at).toLocaleString()}
+                            `);
+                            sensorMarkers.push(marker);
+                        }
+                    });
+                }
+
+                // Vẽ điểm từ Người dân (Dùng icon màu Cam)
+                if (dataCrowd.success && dataCrowd.data) {
+                    dataCrowd.data.forEach(report => {
+                        if (report.lat && report.lng) {
+                            const crowdMarker = L.circleMarker([report.lat, report.lng], {
+                                radius: 8,
+                                fillColor: "#ff7800",
+                                color: "#000",
+                                weight: 1,
+                                opacity: 1,
+                                fillOpacity: 0.8
+                            }).addTo(map);
+
+                            crowdMarker.bindPopup(`
+                                <b>Người báo cáo: ${report.reporter_name}</b><br>
+                                Tình trạng: <span style="color:red">${report.flood_level}</span><br>
+                                Thời gian: ${new Date(report.created_at).toLocaleString()}
+                            `);
+                            crowdMarkers.push(crowdMarker);
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Lỗi khi cập nhật bản đồ:', error);
+            }
+        }
+
+        // Sự kiện click vào bản đồ để báo cáo
+        map.on('click', function(e) {
+            const lat = e.latlng.lat;
+            const lng = e.latlng.lng;
+
+            const popupContent = `
+                <div class="flood-popup">
+                    <h4>Báo cáo ngập tại đây</h4>
+                    <input type="text" id="rep_name" placeholder="Tên của bạn"><br><br>
+                    <select id="flood_lvl">
+                        <option value="Nhẹ">Ngập nhẹ (dưới mắt cá)</option>
+                        <option value="Trung bình">Ngập vừa (nửa bánh xe)</option>
+                        <option value="Nặng">Ngập nặng (không thể đi)</option>
+                    </select><br><br>
+                    <button onclick="sendReport(${lat}, ${lng})">Gửi báo cáo</button>
+                </div>
+            `;
+
+            L.popup()
+                .setLatLng(e.latlng)
+                .setContent(popupContent)
+                .openOn(map);
+        });
+
+        // Hàm gửi dữ liệu về Server
+        async function sendReport(lat, lng) {
+            const name = document.getElementById('rep_name').value;
+            const level = document.getElementById('flood_lvl').value;
+
+            const response = await fetch('/api/report-flood', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, level, lat, lng })
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                alert("Báo cáo thành công!");
+                map.closePopup();
+            }
+        }
+
+        updateMap();
+        setInterval(updateMap, 10000); // Tự động cập nhật mỗi 10 giây
+    </script>
+</body>
+</html>
+
