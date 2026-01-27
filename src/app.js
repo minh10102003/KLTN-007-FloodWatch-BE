@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const floodRoutes = require('./routes/floodRoutes');
 const crowdReportRoutes = require('./routes/crowdReportRoutes');
+const sensorRoutes = require('./routes/sensorRoutes');
 
 const app = express();
 
@@ -13,6 +14,7 @@ app.use(express.static('public')); // Cấu hình để phục vụ file tĩnh t
 // Routes
 app.use('/api', floodRoutes);
 app.use('/api', crowdReportRoutes);
+app.use('/api', sensorRoutes);
 
 module.exports = app;
 
