@@ -460,3 +460,6 @@ Mực nước (water_level) = Độ cao lắp đặt (installation_height) - Kho
 - Tìm sensor trong bán kính 500m
 - Nếu sensor báo ngập (warning/danger) VÀ người dân báo ngập → `cross_verified`
 - Nếu chỉ người dân báo mà sensor bình thường → `pending`
+
+
+

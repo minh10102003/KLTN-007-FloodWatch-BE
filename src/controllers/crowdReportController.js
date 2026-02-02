@@ -25,7 +25,7 @@ const crowdReportController = {
     // Nhận báo cáo ngập lụt từ người dùng với xác minh chéo
     createReport: async (req, res) => {
         try {
-            const { name, reporter_id, level, lng, lat } = req.body;
+            const { name, reporter_id, level, lng, lat, photo_url } = req.body;
             
             // Validate input
             if (!name || !level || !lng || !lat) {
@@ -44,7 +44,7 @@ const crowdReportController = {
                 });
             }
             
-            const result = await crowdReportModel.createReport(name, reporter_id, level, lng, lat);
+            const result = await crowdReportModel.createReport(name, reporter_id, level, lng, lat, photo_url);
             
             let message = "Cảm ơn bạn đã báo cáo!";
             if (result.verified_by_sensor) {
@@ -68,5 +68,9 @@ const crowdReportController = {
 };
 
 module.exports = crowdReportController;
+
+
+
+
 
 

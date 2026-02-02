@@ -78,3 +78,7 @@ INSERT INTO sensor_thresholds (sensor_id, warning_threshold, danger_threshold, u
 VALUES ('S01', 10, 30, 'system');
 
 
+
+
+
+
