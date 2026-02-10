@@ -419,7 +419,10 @@ This project is licensed under the ISC License.
 
 ---
 
+<<<<<<< HEAD
 **For detailed setup instructions in Vietnamese, see [HUONG_DAN_CAI_DAT_BACKEND.md](./HUONG_DAN_CAI_DAT_BACKEND.md)**
 
 **For complete API documentation, see [COMPLETE_BACKEND_GUIDE.md](./COMPLETE_BACKEND_GUIDE.md)**
 
+=======
+>>>>>>> a9b2cfd0526322a48744cdecbbcb8f5dc9220391
