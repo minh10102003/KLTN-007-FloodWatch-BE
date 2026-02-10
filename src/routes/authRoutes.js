@@ -136,7 +136,6 @@ router.post('/register', authController.register);
  *                   properties:
  *                     user:
  *                       $ref: '#/components/schemas/User'
- *                       description: Thông tin user (bao gồm role: user/admin/moderator)
  *                     token:
  *                       type: string
  *                       description: JWT token để sử dụng cho các API cần authentication
@@ -176,9 +175,12 @@ router.post('/register', authController.register);
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/Error'
- *             example:
- *               success: false
- *               error: Thiếu thông tin: username, password
+ *             examples:
+ *               missingFields:
+ *                 summary: Thiếu thông tin
+ *                 value:
+ *                   success: false
+ *                   error: "Thiếu thông tin: username, password"
  *       401:
  *         description: Username hoặc password không đúng, hoặc tài khoản bị vô hiệu hóa
  *         content:

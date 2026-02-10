@@ -6,18 +6,23 @@ const crowdReportRepository = require('../repositories/crowdReportRepository');
  */
 const crowdReportModel = {
     // Lấy các báo cáo từ người dân trong vòng 24 giờ qua
-    getRecentReports: async () => {
-        return await crowdReportRepository.getRecentReports();
+    getRecentReports: async (hours = 24, moderationStatus = null, validationStatus = null) => {
+        return await crowdReportRepository.getRecentReports(hours, moderationStatus, validationStatus);
     },
 
     // Tạo báo cáo mới từ người dân với xác minh chéo
-    createReport: async (name, reporterId, level, lng, lat, photoUrl = null) => {
-        return await crowdReportRepository.createReport(name, reporterId, level, lng, lat, photoUrl);
+    createReport: async (name, reporterId, level, lng, lat, photoUrl = null, locationDescription = null) => {
+        return await crowdReportRepository.createReport(name, reporterId, level, lng, lat, photoUrl, locationDescription);
     },
 
-    // Lấy tất cả báo cáo (không giới hạn thời gian)
-    getAllReports: async (limit = 100) => {
-        return await crowdReportRepository.getAllReports(limit);
+    // Lấy tất cả báo cáo (không giới hạn thời gian) - DEPRECATED: Dùng getUserReports thay thế
+    getAllReports: async (limit = 100, moderationStatus = null) => {
+        return await crowdReportRepository.getAllReports(limit, moderationStatus);
+    },
+
+    // Lấy tất cả báo cáo của một user cụ thể
+    getUserReports: async (userId, limit = 1000, moderationStatus = null) => {
+        return await crowdReportRepository.getUserReports(userId, limit, moderationStatus);
     }
 };
 

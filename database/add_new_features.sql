@@ -126,7 +126,7 @@ BEGIN
             NEW.status,
             CASE WHEN NEW.status = 'danger' THEN 'critical' ELSE 'high' END,
             'Cảnh báo ngập lụt tại ' || (SELECT location_name FROM sensors WHERE sensor_id = NEW.sensor_id) || 
-            ': Mực nước ' || ROUND(NEW.water_level, 2) || 'cm',
+            ': Mực nước ' || ROUND(NEW.water_level::numeric, 2) || 'cm',
             NEW.water_level,
             NEW.velocity,
             'active'

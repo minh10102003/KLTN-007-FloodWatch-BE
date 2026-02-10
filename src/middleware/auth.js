@@ -51,8 +51,35 @@ const requireModerator = (req, res, next) => {
     next();
 };
 
+/**
+ * Middleware xác thực JWT (optional - không bắt buộc)
+ * Nếu có token hợp lệ, set req.user; nếu không, req.user = null
+ */
+const optionalAuthenticate = (req, res, next) => {
+    try {
+        const token = req.headers.authorization?.split(' ')[1]; // Bearer <token>
+        
+        if (token) {
+            try {
+                const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+                req.user = decoded;
+            } catch (err) {
+                // Token không hợp lệ, nhưng không throw error (optional)
+                req.user = null;
+            }
+        } else {
+            req.user = null;
+        }
+        next();
+    } catch (err) {
+        req.user = null;
+        next();
+    }
+};
+
 module.exports = {
     authenticate,
+    optionalAuthenticate,
     requireAdmin,
     requireModerator
 };

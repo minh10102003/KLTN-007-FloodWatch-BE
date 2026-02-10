@@ -9,8 +9,8 @@ class CrowdReportRepository extends BaseRepository {
     /**
      * Lấy các báo cáo từ người dân trong vòng 24 giờ qua
      */
-    async getRecentReports() {
-        const query = `
+    async getRecentReports(hours = 24, moderationStatus = null, validationStatus = null) {
+        let query = `
             SELECT 
                 id,
                 reporter_name,
@@ -19,14 +19,32 @@ class CrowdReportRepository extends BaseRepository {
                 reliability_score,
                 validation_status,
                 verified_by_sensor,
+                photo_url,
+                moderation_status,
+                moderated_by,
+                moderated_at,
+                rejection_reason,
                 ST_X(location::geometry) as lng, 
                 ST_Y(location::geometry) as lat, 
                 created_at 
             FROM crowd_reports 
-            WHERE created_at > NOW() - INTERVAL '24 hours'
-            ORDER BY created_at DESC
+            WHERE created_at > NOW() - INTERVAL '${hours} hours'
         `;
-        return await this.queryAll(query);
+        const params = [];
+        let paramIndex = 1;
+
+        if (moderationStatus) {
+            query += ` AND moderation_status = $${paramIndex++}`;
+            params.push(moderationStatus);
+        }
+
+        if (validationStatus) {
+            query += ` AND validation_status = $${paramIndex++}`;
+            params.push(validationStatus);
+        }
+
+        query += ` ORDER BY created_at DESC`;
+        return await this.queryAll(query, params);
     }
 
     /**
@@ -70,6 +88,34 @@ class CrowdReportRepository extends BaseRepository {
     }
 
     /**
+     * Lấy báo cáo theo ID
+     * @param {number} reportId - Report ID
+     */
+    async getReportById(reportId) {
+        const query = `
+            SELECT 
+                id,
+                reporter_name,
+                reporter_id,
+                flood_level,
+                reliability_score,
+                validation_status,
+                verified_by_sensor,
+                photo_url,
+                moderation_status,
+                moderated_by,
+                moderated_at,
+                rejection_reason,
+                ST_X(location::geometry) as lng, 
+                ST_Y(location::geometry) as lat, 
+                created_at
+            FROM crowd_reports
+            WHERE id = $1
+        `;
+        return await this.queryOne(query, [reportId]);
+    }
+
+    /**
      * Kiểm duyệt báo cáo (approve/reject)
      * @param {number} reportId - Report ID
      * @param {string} moderationStatus - 'approved' hoặc 'rejected'
@@ -86,7 +132,13 @@ class CrowdReportRepository extends BaseRepository {
             WHERE id = $4
             RETURNING *
         `;
-        return await this.queryOne(query, [moderationStatus, moderatorId, rejectionReason, reportId]);
+        const result = await this.queryOne(query, [moderationStatus, moderatorId, rejectionReason, reportId]);
+        
+        if (!result) {
+            throw new Error(`Không tìm thấy báo cáo với ID: ${reportId}`);
+        }
+        
+        return result;
     }
 
     /**
@@ -153,15 +205,60 @@ class CrowdReportRepository extends BaseRepository {
     }
 
     /**
+     * Lấy tất cả báo cáo của một user cụ thể
+     * @param {number} userId - User ID
+     * @param {number} limit - Số lượng tối đa
+     * @param {string} moderationStatus - Trạng thái kiểm duyệt (optional)
+     */
+    async getUserReports(userId, limit = 1000, moderationStatus = null) {
+        // Convert userId sang string để match với VARCHAR trong database
+        const reporterIdStr = String(userId);
+        
+        let query = `
+            SELECT 
+                id,
+                reporter_name,
+                reporter_id,
+                flood_level,
+                reliability_score,
+                validation_status,
+                verified_by_sensor,
+                photo_url,
+                moderation_status,
+                moderated_by,
+                moderated_at,
+                rejection_reason,
+                ST_X(location::geometry) as lng, 
+                ST_Y(location::geometry) as lat, 
+                created_at 
+            FROM crowd_reports 
+            WHERE reporter_id = $1
+        `;
+        const params = [reporterIdStr];
+        let paramIndex = 2;
+
+        if (moderationStatus) {
+            query += ` AND moderation_status = $${paramIndex++}`;
+            params.push(moderationStatus);
+        }
+
+        query += ` ORDER BY created_at DESC LIMIT $${paramIndex++}`;
+        params.push(limit);
+
+        return await this.queryAll(query, params);
+    }
+
+    /**
      * Tạo báo cáo mới từ người dân với xác minh chéo
      * @param {string} name - Tên người báo cáo
-     * @param {string} reporterId - ID người báo cáo
+     * @param {number} reporterId - ID người báo cáo (user ID từ token, có thể null)
      * @param {string} level - Mức độ ngập (Nhẹ, Trung bình, Nặng)
      * @param {number} lng - Longitude
      * @param {number} lat - Latitude
      * @param {string} photoUrl - URL của ảnh (optional)
+     * @param {string} locationDescription - Mô tả vị trí (optional)
      */
-    async createReport(name, reporterId, level, lng, lat, photoUrl = null) {
+    async createReport(name, reporterId, level, lng, lat, photoUrl = null, locationDescription = null) {
         // 1. Xác minh chéo với sensor
         const validation = await this.crossValidateWithSensors(lng, lat, level);
         
@@ -180,6 +277,7 @@ class CrowdReportRepository extends BaseRepository {
         }
         
         // 3. Tạo báo cáo
+        // Lưu ý: location_description có thể không có trong schema cũ, bỏ qua nếu không có
         const query = `
             INSERT INTO crowd_reports (
                 reporter_name, 
@@ -197,7 +295,7 @@ class CrowdReportRepository extends BaseRepository {
         
         const result = await this.queryOne(query, [
             name,
-            reporterId || null,
+            reporterId || null, // Đảm bảo không bao giờ là undefined, luôn là number hoặc null
             level,
             lng,
             lat,
