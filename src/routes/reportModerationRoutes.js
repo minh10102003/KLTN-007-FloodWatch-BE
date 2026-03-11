@@ -146,7 +146,7 @@ router.put('/:reportId/moderate', authenticate, requireModerator, reportModerati
  *                       approved_count:
  *                         type: integer
  */
-router.get('/reliability-ranking', authenticate, reportModerationController.getReliabilityRanking);
+router.get('/reliability-ranking', authenticate, requireModerator, reportModerationController.getReliabilityRanking);
 
 module.exports = router;
 

@@ -22,13 +22,18 @@ async function runMigration() {
     try {
         console.log('🔄 Đang chạy migration...');
         
-        // Đọc file SQL
-        const migrationFile = path.join(__dirname, '..', 'database', 'add_new_features.sql');
-        const sql = fs.readFileSync(migrationFile, 'utf8');
+        const databaseDir = path.join(__dirname, '..', 'database');
+        const migrationFiles = ['add_new_features.sql', 'add_is_online_to_users.sql', 'add_access_logs.sql'];
         
-        // Chạy migration
         await client.query('BEGIN');
-        await client.query(sql);
+        for (const file of migrationFiles) {
+            const filePath = path.join(databaseDir, file);
+            if (fs.existsSync(filePath)) {
+                const sql = fs.readFileSync(filePath, 'utf8');
+                await client.query(sql);
+                console.log('  ✓', file);
+            }
+        }
         await client.query('COMMIT');
         
         console.log('✅ Migration thành công!');

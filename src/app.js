@@ -12,6 +12,11 @@ const emergencySubscriptionRoutes = require('./routes/emergencySubscriptionRoute
 const heatmapRoutes = require('./routes/heatmapRoutes');
 const otaRoutes = require('./routes/otaRoutes');
 const energyRoutes = require('./routes/energyRoutes');
+const statsRoutes = require('./routes/statsRoutes');
+const uploadRoutes = require('./routes/uploadRoutes');
+const auditLogRoutes = require('./routes/auditLogRoutes');
+const accessLogMiddleware = require('./middleware/accessLogMiddleware');
+const path = require('path');
 
 const app = express();
 
@@ -19,9 +24,13 @@ const app = express();
 app.use(cors()); // Cho phép FE và BE chạy trên các cổng khác nhau
 app.use(express.json()); // Cho phép Backend đọc dữ liệu JSON từ trình duyệt gửi lên
 app.use(express.static('public')); // Cấu hình để phục vụ file tĩnh từ thư mục public
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads'))); // Ảnh báo cáo (upload)
 
 // Swagger Documentation
 swaggerSetup(app);
+
+// Ghi lượt truy cập mỗi request tới /api (để thống kê hàng tháng)
+app.use('/api', accessLogMiddleware);
 
 // Routes
 app.use('/api', floodRoutes);
@@ -35,6 +44,9 @@ app.use('/api/emergency-subscriptions', emergencySubscriptionRoutes);
 app.use('/api/heatmap', heatmapRoutes);
 app.use('/api/ota', otaRoutes);
 app.use('/api/energy', energyRoutes);
+app.use('/api', statsRoutes);
+app.use('/api', uploadRoutes);
+app.use('/api', auditLogRoutes);
 
 module.exports = app;
 

@@ -105,8 +105,8 @@ router.get('/crowd-reports/all', authenticate, crowdReportController.getAllRepor
  *     summary: Tạo báo cáo ngập lụt mới (với xác minh chéo)
  *     description: |
  *       Endpoint này cho phép cả authenticated và anonymous users.
- *       - Nếu có Bearer token: reporter_id sẽ được lưu từ token
- *       - Nếu không có token: reporter_id = null (báo cáo ẩn danh)
+ *       - Nếu có Bearer token: reporter_id lưu từ token; reporter_name lấy từ tài khoản (full_name hoặc username), không cần gửi name.
+ *       - Nếu không có token (khách): bắt buộc gửi name; reporter_id = null.
  *     tags: [Crowd Reports]
  *     security:
  *       - bearerAuth: []  # Optional - không bắt buộc
@@ -117,13 +117,13 @@ router.get('/crowd-reports/all', authenticate, crowdReportController.getAllRepor
  *           schema:
  *             type: object
  *             required:
- *               - name
  *               - level
  *               - lng
  *               - lat
  *             properties:
  *               name:
  *                 type: string
+ *                 description: Bắt buộc khi báo cáo với tư cách khách (không đăng nhập). Bỏ qua khi đã đăng nhập (dùng tên tài khoản).
  *                 example: Nguyễn Văn A
  *               reporter_id:
  *                 type: string

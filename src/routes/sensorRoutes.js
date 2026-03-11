@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const sensorController = require('../controllers/sensorController');
+const { authenticate, requireAdmin } = require('../middleware/auth');
 
 /**
  * @swagger
@@ -172,7 +173,7 @@ router.get('/:sensorId', sensorController.getSensorById);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.post('/', sensorController.createSensor);
+router.post('/', authenticate, requireAdmin, sensorController.createSensor);
 
 /**
  * @swagger
@@ -248,7 +249,7 @@ router.post('/', sensorController.createSensor);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.put('/:sensorId', sensorController.updateSensor);
+router.put('/:sensorId', authenticate, requireAdmin, sensorController.updateSensor);
 
 /**
  * @swagger
@@ -323,7 +324,7 @@ router.put('/:sensorId', sensorController.updateSensor);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.put('/:sensorId/thresholds', sensorController.updateThresholds);
+router.put('/:sensorId/thresholds', authenticate, requireAdmin, sensorController.updateThresholds);
 
 /**
  * @swagger
@@ -360,6 +361,6 @@ router.put('/:sensorId/thresholds', sensorController.updateThresholds);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.delete('/:sensorId', sensorController.deleteSensor);
+router.delete('/:sensorId', authenticate, requireAdmin, sensorController.deleteSensor);
 
 module.exports = router;

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, requireAdmin } = require('../middleware/auth');
 
 /**
  * @swagger
@@ -203,6 +203,22 @@ router.post('/login', authController.login);
 
 /**
  * @swagger
+ * /api/auth/logout:
+ *   post:
+ *     summary: Đăng xuất (set is_online = false)
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Đăng xuất thành công
+ *       401:
+ *         description: Chưa đăng nhập hoặc token không hợp lệ
+ */
+router.post('/logout', authenticate, authController.logout);
+
+/**
+ * @swagger
  * /api/auth/profile:
  *   get:
  *     summary: Lấy thông tin profile của user hiện tại
@@ -233,6 +249,23 @@ router.get('/profile', authenticate, authController.getProfile);
 
 /**
  * @swagger
+ * /api/auth/profile-icons:
+ *   get:
+ *     summary: Lấy danh sách icon ảnh đại diện có thể chọn
+ *     tags: [Authentication]
+ *     description: Chỉ được chọn một trong các icon này (không tải ảnh từ máy).
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Danh sách icon (name, url)
+ *       401:
+ *         description: Chưa đăng nhập
+ */
+router.get('/profile-icons', authenticate, authController.getProfileIcons);
+
+/**
+ * @swagger
  * /api/auth/profile:
  *   put:
  *     summary: Cập nhật profile
@@ -258,6 +291,10 @@ router.get('/profile', authenticate, authController.getProfile);
  *                 format: email
  *                 example: newemail@example.com
  *                 description: Email mới
+ *               avatar:
+ *                 type: string
+ *                 example: cat.png
+ *                 description: Tên file icon ảnh đại diện (chỉ chọn từ GET /api/auth/profile-icons)
  *     responses:
  *       200:
  *         description: Cập nhật thành công
@@ -333,5 +370,145 @@ router.put('/profile', authenticate, authController.updateProfile);
  *               $ref: '#/components/schemas/Error'
  */
 router.put('/change-password', authenticate, authController.changePassword);
+
+// ---------- Chỉ Admin: quản lý user, phân quyền ----------
+/**
+ * @swagger
+ * /api/auth/users:
+ *   get:
+ *     summary: Lấy danh sách users (chỉ Admin)
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 100, maximum: 500 }
+ *       - in: query
+ *         name: offset
+ *         schema: { type: integer, default: 0 }
+ *     responses:
+ *       200:
+ *         description: Danh sách users
+ *       403:
+ *         description: Chỉ admin mới có quyền
+ */
+router.get('/users', authenticate, requireAdmin, authController.getAllUsers);
+
+/**
+ * @swagger
+ * /api/auth/users:
+ *   post:
+ *     summary: Tạo tài khoản mới (chỉ Admin) – user, moderator hoặc admin
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [username, email, password, role]
+ *             properties:
+ *               username: { type: string, example: mod01 }
+ *               email: { type: string, format: email, example: mod01@hcmflood.vn }
+ *               password: { type: string, format: password, example: SecurePass123 }
+ *               role: { type: string, enum: [user, moderator, admin], example: moderator }
+ *               full_name: { type: string, example: Moderator One }
+ *               phone: { type: string }
+ *     responses:
+ *       201:
+ *         description: Tạo tài khoản thành công (data: user, không trả token)
+ *       400:
+ *         description: Thiếu field, role không hợp lệ, hoặc username/email đã tồn tại
+ *       403:
+ *         description: Chỉ admin mới có quyền
+ */
+router.post('/users', authenticate, requireAdmin, authController.createUser);
+
+/**
+ * @swagger
+ * /api/auth/users/{userId}/role:
+ *   put:
+ *     summary: Gán role cho user (chỉ Admin)
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema: { type: integer }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [role]
+ *             properties:
+ *               role:
+ *                 type: string
+ *                 enum: [user, moderator, admin]
+ *     responses:
+ *       200:
+ *         description: Cập nhật role thành công
+ *       400:
+ *         description: Role không hợp lệ hoặc không thể tự hạ quyền (admin duy nhất)
+ *       403:
+ *         description: Chỉ admin mới có quyền
+ *       404:
+ *         description: Không tìm thấy user
+ */
+router.put('/users/:userId/role', authenticate, requireAdmin, authController.assignRole);
+
+/**
+ * @swagger
+ * /api/auth/users/{userId}/active:
+ *   put:
+ *     summary: Bật/tắt tài khoản user (chỉ Admin)
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema: { type: integer }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [is_active]
+ *             properties:
+ *               is_active:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Cập nhật trạng thái thành công
+ *       403:
+ *         description: Chỉ admin mới có quyền
+ *       404:
+ *         description: Không tìm thấy user
+ */
+router.put('/users/:userId/active', authenticate, requireAdmin, authController.setActiveStatus);
+
+/**
+ * @swagger
+ * /api/auth/users/{userId}/recompute-reliability:
+ *   post:
+ *     summary: Tính lại điểm tin cậy reporter từ lịch sử (Cách A). Chỉ Admin.
+ *     tags: [Authentication]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters: [{ in: path, name: userId, required: true, schema: { type: integer } }]
+ *     responses:
+ *       200: { description: Đã tính lại, data: { userId, reporter_reliability } }
+ *       403: { description: Chỉ admin }
+ *       404: { description: Không tìm thấy user }
+ */
+router.post('/users/:userId/recompute-reliability', authenticate, requireAdmin, authController.recomputeReporterReliability);
 
 module.exports = router;

@@ -1,5 +1,6 @@
 const BaseRepository = require('./baseRepository');
 const sensorRepository = require('./sensorRepository');
+const userRepository = require('./userRepository');
 
 /**
  * Crowd Report Repository
@@ -85,6 +86,28 @@ class CrowdReportRepository extends BaseRepository {
         params.push(limit);
 
         return await this.queryAll(query, params);
+    }
+
+    /**
+     * Thống kê báo cáo theo giờ hoặc ngày (cho Moderator/Admin)
+     * @param {string} groupBy - 'hour' | 'day'
+     * @param {Date|string} from - Từ ngày (ISO string hoặc Date)
+     * @param {Date|string} to - Đến ngày (ISO string hoặc Date)
+     */
+    async getReportStatsByPeriod(groupBy = 'day', from = null, to = null) {
+        const toDate = to ? new Date(to) : new Date();
+        const fromDate = from ? new Date(from) : new Date(toDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const trunc = groupBy === 'hour' ? 'hour' : 'day';
+        const query = `
+            SELECT 
+                date_trunc($1, created_at AT TIME ZONE 'UTC') AS period,
+                COUNT(*)::int AS count
+            FROM crowd_reports
+            WHERE created_at >= $2 AND created_at <= $3
+            GROUP BY date_trunc($1, created_at AT TIME ZONE 'UTC')
+            ORDER BY period
+        `;
+        return await this.queryAll(query, [trunc, fromDate.toISOString(), toDate.toISOString()]);
     }
 
     /**
@@ -259,25 +282,23 @@ class CrowdReportRepository extends BaseRepository {
      * @param {string} locationDescription - Mô tả vị trí (optional)
      */
     async createReport(name, reporterId, level, lng, lat, photoUrl = null, locationDescription = null) {
-        // 1. Xác minh chéo với sensor
+        // 1. Kiểm tra có sensor trong 500m không – không có thì không cho tạo báo cáo (đặc tả)
         const validation = await this.crossValidateWithSensors(lng, lat, level);
-        
-        // 2. Lấy điểm tin cậy hiện tại
-        let reliabilityScore = 50; // Mặc định
+        if (validation.noSensor) {
+            const err = new Error('NO_SENSOR_IN_RADIUS');
+            err.code = 'NO_SENSOR_IN_RADIUS';
+            throw err;
+        }
+        // 2. Lấy điểm tin cậy: user đăng nhập lấy từ users.reporter_reliability (Cách C), khách = 50
+        let reliabilityScore = 50;
         if (reporterId) {
-            const scoreResult = await this.queryOne(`
-                SELECT AVG(reliability_score) as avg_score
-                FROM crowd_reports
-                WHERE reporter_id = $1
-            `, [reporterId]);
-            
-            if (scoreResult && scoreResult.avg_score) {
-                reliabilityScore = parseFloat(scoreResult.avg_score);
+            const userId = parseInt(reporterId, 10);
+            if (!isNaN(userId)) {
+                reliabilityScore = await userRepository.getReporterReliability(userId);
             }
         }
         
-        // 3. Tạo báo cáo
-        // Lưu ý: location_description có thể không có trong schema cũ, bỏ qua nếu không có
+        // 3. Tạo báo cáo (đã có sensor trong 500m)
         const query = `
             INSERT INTO crowd_reports (
                 reporter_name, 
@@ -323,7 +344,10 @@ class CrowdReportRepository extends BaseRepository {
         try {
             // Tìm các sensor trong bán kính 500m
             const sensors = await sensorRepository.findSensorsInRadius(lng, lat, 500);
-            
+            // Đặc tả: Nếu không có sensor trong 500m → không cho phép gửi báo cáo
+            if (sensors.length === 0) {
+                return { noSensor: true, verified: false, validation_status: 'pending' };
+            }
             if (sensors.length > 0) {
                 const sensor = sensors[0];
                 const sensorWaterLevel = sensor.water_level || 0;
@@ -373,39 +397,25 @@ class CrowdReportRepository extends BaseRepository {
     }
 
     /**
-     * Cập nhật điểm tin cậy cho người báo cáo
-     * @param {string} reporterId - ID người báo cáo
-     * @param {boolean} isAccurate - Báo cáo có chính xác không
+     * Cập nhật điểm tin cậy khi báo cáo được xác minh chéo sensor (Cách B).
+     * Cập nhật users.reporter_reliability và đồng bộ sang reliability_score của tất cả báo cáo của reporter.
+     * @param {string} reporterId - ID người báo cáo (string như trong DB)
+     * @param {boolean} isAccurate - true = cross_verified (+10), false = sai (-10)
      */
     async updateReliabilityScore(reporterId, isAccurate) {
         try {
-            if (!reporterId) return;
-            
-            // Lấy điểm hiện tại
-            const currentResult = await this.queryOne(`
-                SELECT AVG(reliability_score) as avg_score
-                FROM crowd_reports
-                WHERE reporter_id = $1
-            `, [reporterId]);
-            
-            let currentScore = 50; // Mặc định
-            if (currentResult && currentResult.avg_score) {
-                currentScore = parseFloat(currentResult.avg_score);
-            }
-            
-            // Cập nhật điểm: +5 nếu chính xác, -10 nếu sai
-            const newScore = Math.max(0, Math.min(100, currentScore + (isAccurate ? 5 : -10)));
-            
-            // Cập nhật điểm cho tất cả báo cáo của người này
+            if (!reporterId) return null;
+            const userId = parseInt(reporterId, 10);
+            if (isNaN(userId)) return null;
+            const delta = isAccurate ? 10 : -10;
+            const newScore = await userRepository.updateReporterReliabilityByDelta(userId, delta);
             await this.query(`
-                UPDATE crowd_reports
-                SET reliability_score = $1
-                WHERE reporter_id = $2
+                UPDATE crowd_reports SET reliability_score = $1 WHERE reporter_id = $2
             `, [newScore, reporterId]);
-            
             return newScore;
         } catch (err) {
             console.error('❌ [Reliability] Error updating score:', err.message);
+            return null;
         }
     }
 }

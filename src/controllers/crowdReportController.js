@@ -1,7 +1,9 @@
 const crowdReportModel = require('../models/crowdReportModel');
+const userModel = require('../models/userModel');
+const { withFullPhotoUrls } = require('../utils/photoUrl');
 
 const crowdReportController = {
-    // Lấy các báo cáo từ người dân trong vòng 24 giờ qua
+    // Lấy các báo cáo từ người dân trong vòng 24 giờ qua (photo_url trả full URL)
     getCrowdReports: async (req, res) => {
         try {
             const { hours, moderation_status, validation_status } = req.query;
@@ -10,13 +12,13 @@ const crowdReportController = {
                 moderation_status,
                 validation_status
             );
-            res.json({ success: true, data: data });
+            res.json({ success: true, data: withFullPhotoUrls(req, data) });
         } catch (err) {
             res.status(500).json({ success: false, error: err.message });
         }
     },
 
-    // Lấy tất cả báo cáo của user hiện tại (yêu cầu authentication)
+    // Lấy tất cả báo cáo của user hiện tại (yêu cầu authentication, photo_url full URL)
     getAllReports: async (req, res) => {
         try {
             const { limit, moderation_status } = req.query;
@@ -27,7 +29,7 @@ const crowdReportController = {
             
             res.json({ 
                 success: true, 
-                data: data 
+                data: withFullPhotoUrls(req, data) 
             });
         } catch (err) {
             res.status(500).json({ 
@@ -38,15 +40,24 @@ const crowdReportController = {
     },
 
     // Nhận báo cáo ngập lụt từ người dùng với xác minh chéo
+    // User đăng nhập: dùng tên từ tài khoản (full_name), không bắt buộc gửi name trong body.
+    // Khách (không đăng nhập): bắt buộc gửi name trong body.
     createReport: async (req, res) => {
         try {
             const { name, level, lng, lat, photo_url, location_description } = req.body;
             
-            // Validate input
-            if (!name || !level || !lng || !lat) {
+            // Validate: level, lng, lat luôn bắt buộc
+            if (!level || lng == null || lat == null) {
                 return res.status(400).json({ 
                     success: false, 
-                    error: "Thiếu thông tin bắt buộc: name, level, lng, lat" 
+                    error: "Thiếu thông tin bắt buộc: level, lng, lat" 
+                });
+            }
+            // Khách (không đăng nhập) bắt buộc gửi name
+            if (!req.user && !name) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: "Khách báo cáo cần nhập tên (name). Nếu đã có tài khoản, hãy đăng nhập để báo cáo không cần nhập tên." 
                 });
             }
             
@@ -59,13 +70,18 @@ const crowdReportController = {
                 });
             }
             
-            // Lấy reporter_id từ token nếu user đã đăng nhập (optional)
-            // Nếu không có token, reporter_id sẽ là null (cho phép báo cáo ẩn danh)
-            // Convert sang string vì database lưu VARCHAR
+            // Lấy reporter_id từ token nếu user đã đăng nhập
             const reporter_id = req.user ? String(req.user.id) : null;
             
+            // Tên hiển thị: user đăng nhập lấy từ tài khoản (full_name hoặc username), khách lấy từ body
+            let reporter_name = name || '';
+            if (req.user) {
+                const user = await userModel.getUserById(req.user.id);
+                reporter_name = (user?.full_name && user.full_name.trim()) ? user.full_name.trim() : (user?.username || 'User');
+            }
+            
             const result = await crowdReportModel.createReport(
-                name, 
+                reporter_name, 
                 reporter_id, 
                 level, 
                 lng, 
@@ -92,6 +108,13 @@ const crowdReportController = {
                 }
             });
         } catch (err) {
+            // Đặc tả: Ngoài vùng phủ sensor → 400 với message chuẩn
+            if (err.code === 'NO_SENSOR_IN_RADIUS') {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Hiện tại khu vực chưa có máy đo, không thể xác thực'
+                });
+            }
             res.status(500).json({ success: false, error: err.message });
         }
     }

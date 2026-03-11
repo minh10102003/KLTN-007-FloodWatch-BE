@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile - HCM Flood</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: system-ui, sans-serif; max-width: 480px; margin: 20px auto; padding: 0 16px; }
+        h1 { font-size: 1.25rem; margin-bottom: 16px; }
+        .card { border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+        .profile-row { display: flex; align-items: center; gap: 16px; margin-bottom: 12px; }
+        .avatar-wrap { position: relative; }
+        .avatar { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; background: #eee; }
+        .btn { padding: 8px 14px; border-radius: 6px; border: 1px solid #0d6efd; background: #0d6efd; color: #fff; cursor: pointer; font-size: 14px; }
+        .btn:hover { background: #0b5ed7; }
+        .btn-secondary { background: #6c757d; border-color: #6c757d; }
+        .btn-secondary:hover { background: #5c636a; }
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 10; align-items: center; justify-content: center; padding: 16px; }
+        .modal.show { display: flex; }
+        .modal-content { background: #fff; border-radius: 12px; padding: 20px; max-width: 360px; width: 100%; }
+        .modal-title { margin: 0 0 16px; font-size: 1.1rem; }
+        .icon-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+        .icon-item { cursor: pointer; padding: 8px; border: 2px solid transparent; border-radius: 8px; text-align: center; }
+        .icon-item:hover, .icon-item.selected { border-color: #0d6efd; background: #e7f1ff; }
+        .icon-item img { width: 56px; height: 56px; object-fit: contain; }
+        .modal-actions { margin-top: 16px; display: flex; gap: 8px; justify-content: flex-end; }
+        .login-form input { width: 100%; padding: 8px 12px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 6px; }
+        .error { color: #dc3545; font-size: 14px; margin-top: 8px; }
+        .info { color: #666; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <h1>Profile</h1>
+
+    <div id="loginSection" class="card">
+        <p class="info">Đăng nhập để xem và chỉnh sửa profile.</p>
+        <input type="text" id="loginUsername" placeholder="Username">
+        <input type="password" id="loginPassword" placeholder="Mật khẩu">
+        <button type="button" class="btn" id="btnLogin">Đăng nhập</button>
+        <p id="loginError" class="error"></p>
+    </div>
+
+    <div id="profileSection" class="card" style="display: none;">
+        <div class="profile-row">
+            <div class="avatar-wrap">
+                <img id="profileAvatar" class="avatar" src="" alt="Avatar">
+                <button type="button" class="btn btn-secondary" id="btnChangeAvatar" style="margin-top: 8px; display: block;">Đổi ảnh</button>
+            </div>
+            <div>
+                <p><strong id="profileUsername"></strong></p>
+                <p class="info" id="profileEmail"></p>
+                <p class="info" id="profileName"></p>
+            </div>
+        </div>
+        <button type="button" class="btn btn-secondary" id="btnLogout">Đăng xuất</button>
+    </div>
+
+    <div id="avatarModal" class="modal">
+        <div class="modal-content">
+            <h2 class="modal-title">Chọn ảnh đại diện</h2>
+            <p class="info" style="margin-bottom: 12px;">Chọn một icon bên dưới (không tải ảnh từ máy).</p>
+            <div id="iconGrid" class="icon-grid"></div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" id="modalCancel">Hủy</button>
+                <button type="button" class="btn" id="modalSave">Lưu</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = '/api/auth';
+        let token = localStorage.getItem('token');
+        let profileIcons = [];
+        let selectedIconName = null;
+
+        function getHeaders() {
+            return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
+        }
+
+        function show(el) { el.style.display = ''; }
+        function hide(el) { el.style.display = 'none'; }
+
+        async function login() {
+            const username = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            const errEl = document.getElementById('loginError');
+            errEl.textContent = '';
+            if (!username || !password) {
+                errEl.textContent = 'Nhập username và mật khẩu.';
+                return;
+            }
+            try {
+                const res = await fetch(API + '/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await res.json();
+                if (data.success && data.data.token) {
+                    token = data.data.token;
+                    localStorage.setItem('token', token);
+                    hide(document.getElementById('loginSection'));
+                    show(document.getElementById('profileSection'));
+                    loadProfile();
+                } else {
+                    errEl.textContent = data.error || 'Đăng nhập thất bại.';
+                }
+            } catch (e) {
+                errEl.textContent = 'Lỗi kết nối.';
+            }
+        }
+
+        async function loadProfile() {
+            try {
+                const res = await fetch(API + '/profile', { headers: getHeaders() });
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                    if (res.status === 401) { logout(); return; }
+                    return;
+                }
+                const u = data.data;
+                document.getElementById('profileUsername').textContent = u.username;
+                document.getElementById('profileEmail').textContent = u.email || '';
+                document.getElementById('profileName').textContent = u.full_name || '';
+                const avatarEl = document.getElementById('profileAvatar');
+                if (u.avatar) {
+                    avatarEl.src = '/profile-icons/' + u.avatar;
+                } else {
+                    avatarEl.src = ''; avatarEl.alt = 'Chưa chọn ảnh';
+                }
+            } catch (e) {}
+        }
+
+        function logout() {
+            token = null;
+            localStorage.removeItem('token');
+            show(document.getElementById('loginSection'));
+            hide(document.getElementById('profileSection'));
+        }
+
+        async function loadProfileIcons() {
+            try {
+                const res = await fetch(API + '/profile-icons', { headers: getHeaders() });
+                const data = await res.json();
+                if (data.success && data.data) profileIcons = data.data;
+            } catch (e) {}
+        }
+
+        function openAvatarModal() {
+            selectedIconName = null;
+            const grid = document.getElementById('iconGrid');
+            grid.innerHTML = '';
+            profileIcons.forEach(icon => {
+                const div = document.createElement('div');
+                div.className = 'icon-item';
+                div.dataset.name = icon.name;
+                div.innerHTML = '<img src="' + icon.url + '" alt="">';
+                div.onclick = () => {
+                    grid.querySelectorAll('.icon-item').forEach(el => el.classList.remove('selected'));
+                    div.classList.add('selected');
+                    selectedIconName = icon.name;
+                };
+                grid.appendChild(div);
+            });
+            document.getElementById('avatarModal').classList.add('show');
+        }
+
+        async function saveAvatar() {
+            if (!selectedIconName) return;
+            try {
+                const res = await fetch(API + '/profile', {
+                    method: 'PUT',
+                    headers: getHeaders(),
+                    body: JSON.stringify({ avatar: selectedIconName })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    document.getElementById('avatarModal').classList.remove('show');
+                    loadProfile();
+                } else {
+                    alert(data.error || 'Cập nhật thất bại.');
+                }
+            } catch (e) {
+                alert('Lỗi kết nối.');
+            }
+        }
+
+        document.getElementById('btnLogin').onclick = login;
+        document.getElementById('btnLogout').onclick = logout;
+        document.getElementById('btnChangeAvatar').onclick = async () => {
+            await loadProfileIcons();
+            openAvatarModal();
+        };
+        document.getElementById('modalCancel').onclick = () => document.getElementById('avatarModal').classList.remove('show');
+        document.getElementById('modalSave').onclick = saveAvatar;
+
+        if (token) {
+            (async () => {
+                const res = await fetch(API + '/profile', { headers: getHeaders() });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.success) {
+                        hide(document.getElementById('loginSection'));
+                        show(document.getElementById('profileSection'));
+                        loadProfile();
+                        return;
+                    }
+                }
+                logout();
+            })();
+        }
+    </script>
+</body>
+</html>

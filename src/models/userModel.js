@@ -49,6 +49,32 @@ const userModel = {
     },
 
     /**
+     * Admin tạo tài khoản mới (user / moderator / admin)
+     * Không trả token – người được tạo sẽ đăng nhập sau.
+     */
+    async createUserByAdmin(userData) {
+        const { username, email, password, full_name, phone, role } = userData;
+        const validRoles = ['user', 'moderator', 'admin'];
+        if (!role || !validRoles.includes(role)) {
+            throw new Error('Role không hợp lệ. Chọn: user, moderator, admin');
+        }
+        const existingUser = await userRepository.findByUsername(username);
+        if (existingUser) throw new Error('Username đã tồn tại');
+        const existingEmail = await userRepository.findByEmail(email);
+        if (existingEmail) throw new Error('Email đã tồn tại');
+        const password_hash = await bcrypt.hash(password, 10);
+        const user = await userRepository.createUser({
+            username,
+            email,
+            password_hash,
+            full_name,
+            phone,
+            role
+        });
+        return user;
+    },
+
+    /**
      * Đăng nhập
      */
     async login(username, password) {
@@ -136,6 +162,71 @@ const userModel = {
      */
     async getAllUsers(limit, offset) {
         return await userRepository.getAllUsers(limit, offset);
+    },
+
+    /**
+     * Đếm số admin (để validate không tự hạ role nếu chỉ còn 1 admin)
+     * @param {number} [excludeUserId] - User ID loại trừ
+     */
+    async countAdmins(excludeUserId) {
+        return await userRepository.countAdmins(excludeUserId);
+    },
+
+    /**
+     * Lấy danh sách user đang online (is_online = true)
+     */
+    async getOnlineUsers() {
+        return await userRepository.getOnlineUsers();
+    },
+
+    /**
+     * Đăng xuất: set is_online = false
+     * @param {number} userId - User ID
+     */
+    async logout(userId) {
+        return await userRepository.setOnline(userId, false);
+    },
+
+    // ---------- Điểm tin cậy reporter (Cách C: A + B) ----------
+
+    /** Hệ số delta Cách B: cross_verified +10, approved +3, rejected -8 hoặc -15 (spam/fake) */
+    REPORTER_RELIABILITY_DELTAS: { cross_verified: 10, approved: 3, rejected: -8, rejected_severe: -15 },
+
+    /**
+     * Lấy điểm tin cậy reporter (0-100). Dùng khi tạo báo cáo mới.
+     */
+    async getReporterReliability(userId) {
+        return await userRepository.getReporterReliability(userId);
+    },
+
+    /**
+     * Cập nhật điểm tin cậy theo sự kiện (Cách B).
+     * @param {number} userId - User ID (trong bảng users)
+     * @param {'cross_verified'|'approved'|'rejected'} eventType
+     * @param {string} [rejectionReason] - Lý do từ chối (để trừ nặng hơn nếu spam/fake)
+     * @returns {Promise<number>} Điểm mới
+     */
+    async applyReporterReliabilityEvent(userId, eventType, rejectionReason = null) {
+        const deltas = this.REPORTER_RELIABILITY_DELTAS;
+        let delta = 0;
+        if (eventType === 'cross_verified') delta = deltas.cross_verified;
+        else if (eventType === 'approved') delta = deltas.approved;
+        else if (eventType === 'rejected') {
+            const reason = (rejectionReason || '').toLowerCase();
+            const isSevere = /spam|fake|giả|sai\s*sự\s*thật/.test(reason);
+            delta = isSevere ? deltas.rejected_severe : deltas.rejected;
+        }
+        if (delta === 0) return await userRepository.getReporterReliability(userId);
+        return await userRepository.updateReporterReliabilityByDelta(userId, delta);
+    },
+
+    /**
+     * Tính lại điểm tin cậy từ lịch sử (Cách A) và lưu vào users.reporter_reliability.
+     * @param {number} userId - User ID (số). Trong crowd_reports reporter_id là string.
+     */
+    async recomputeReporterReliabilityFromHistory(userId) {
+        const score = await userRepository.computeReporterReliabilityFromHistory(String(userId));
+        return await userRepository.setReporterReliability(userId, score);
     }
 };
 

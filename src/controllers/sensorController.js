@@ -1,4 +1,5 @@
 const sensorModel = require('../models/sensorModel');
+const auditLogRepository = require('../repositories/auditLogRepository');
 
 const sensorController = {
     // Lấy tất cả sensors
@@ -72,7 +73,9 @@ const sensorController = {
                 warning_threshold: warning_threshold ? parseFloat(warning_threshold) : 10,
                 danger_threshold: danger_threshold ? parseFloat(danger_threshold) : 30
             });
-
+            if (req.user) {
+                await auditLogRepository.log(req.user.id, 'sensor_created', 'sensor', data.sensor_id, data.location_name);
+            }
             res.status(201).json({
                 success: true,
                 message: 'Tạo sensor thành công',
@@ -105,6 +108,9 @@ const sensorController = {
             }
 
             const data = await sensorModel.updateSensor(sensorId, sensorData);
+            if (req.user) {
+                await auditLogRepository.log(req.user.id, 'sensor_updated', 'sensor', sensorId, JSON.stringify(sensorData));
+            }
             res.json({
                 success: true,
                 message: 'Cập nhật sensor thành công',
@@ -154,7 +160,9 @@ const sensorController = {
                 },
                 updatedBy
             );
-
+            if (req.user) {
+                await auditLogRepository.log(req.user.id, 'sensor_threshold_updated', 'sensor', sensorId, `warning=${warning_threshold}, danger=${danger_threshold}`);
+            }
             res.json({
                 success: true,
                 message: 'Cập nhật ngưỡng báo động thành công',
@@ -169,7 +177,11 @@ const sensorController = {
     deleteSensor: async (req, res) => {
         try {
             const { sensorId } = req.params;
+            const existing = await sensorModel.getSensorById(sensorId);
             await sensorModel.deleteSensor(sensorId);
+            if (req.user && existing) {
+                await auditLogRepository.log(req.user.id, 'sensor_deleted', 'sensor', sensorId, existing.location_name);
+            }
             res.json({
                 success: true,
                 message: 'Xóa sensor thành công'

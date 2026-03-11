@@ -1,14 +1,16 @@
 const crowdReportRepository = require('../repositories/crowdReportRepository');
+const userModel = require('../models/userModel');
+const { withFullPhotoUrls } = require('../utils/photoUrl');
 
 const reportModerationController = {
-    // Lấy báo cáo cần kiểm duyệt
+    // Lấy báo cáo cần kiểm duyệt (trả photo_url full URL để Admin/Mod xem được ảnh)
     getPendingReports: async (req, res) => {
         try {
             const { limit } = req.query;
             const data = await crowdReportRepository.getPendingModerationReports(parseInt(limit) || 50);
             res.json({
                 success: true,
-                data: data
+                data: withFullPhotoUrls(req, data)
             });
         } catch (err) {
             res.status(500).json({ success: false, error: err.message });
@@ -64,12 +66,24 @@ const reportModerationController = {
                 });
             }
 
+            // Cách C: cập nhật điểm tin cậy reporter khi duyệt/từ chối (Cách B)
+            if (data.reporter_id) {
+                const reporterUserId = parseInt(data.reporter_id, 10);
+                if (!isNaN(reporterUserId)) {
+                    userModel.applyReporterReliabilityEvent(
+                        reporterUserId,
+                        moderationStatus === 'approved' ? 'approved' : 'rejected',
+                        data.rejection_reason || null
+                    ).catch((err) => console.error('❌ [Reliability] applyReporterReliabilityEvent:', err.message));
+                }
+            }
+
             console.log(`✅ [Moderation] Report ${reportIdNum} updated to ${moderationStatus} by ${req.user.username}`);
 
             res.json({
                 success: true,
                 message: `Đã ${action === 'approve' ? 'duyệt' : 'từ chối'} báo cáo`,
-                data: data
+                data: withFullPhotoUrls(req, data)
             });
         } catch (err) {
             console.error('❌ [Moderation] Error:', err);
