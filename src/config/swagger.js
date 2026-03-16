@@ -108,7 +108,9 @@ const options = {
                         lng: { type: 'number', example: 106.721 },
                         lat: { type: 'number', example: 10.798 },
                         warning_threshold: { type: 'number', example: 10 },
-                        danger_threshold: { type: 'number', example: 30 }
+                        danger_threshold: { type: 'number', example: 30 },
+                        temperature: { type: 'number', nullable: true, description: 'Nhiệt độ °C (DHT22)', example: 28.5 },
+                        humidity: { type: 'number', nullable: true, description: 'Độ ẩm % (DHT22)', example: 65 }
                     }
                 },
                 Alert: {
@@ -136,6 +138,8 @@ const options = {
                         validation_status: { type: 'string', enum: ['pending', 'verified', 'rejected', 'cross_verified'] },
                         verified_by_sensor: { type: 'boolean', example: true },
                         photo_url: { type: 'string', example: 'https://example.com/photo.jpg' },
+                        content: { type: 'string', maxLength: 500, description: 'Nội dung mô tả mức độ ngập (tùy chọn)' },
+                        photo_urls: { type: 'array', items: { type: 'string' }, description: 'Mảng URL ảnh (tối đa 5)' },
                         moderation_status: { type: 'string', enum: ['pending', 'approved', 'rejected'] },
                         lng: { type: 'number', example: 106.721 },
                         lat: { type: 'number', example: 10.798 },

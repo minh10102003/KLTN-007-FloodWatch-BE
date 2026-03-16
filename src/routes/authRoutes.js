@@ -419,7 +419,7 @@ router.get('/users', authenticate, requireAdmin, authController.getAllUsers);
  *               phone: { type: string }
  *     responses:
  *       201:
- *         description: Tạo tài khoản thành công (data: user, không trả token)
+ *         description: "Tạo tài khoản thành công (data: user, không trả token)"
  *       400:
  *         description: Thiếu field, role không hợp lệ, hoặc username/email đã tồn tại
  *       403:
@@ -505,7 +505,7 @@ router.put('/users/:userId/active', authenticate, requireAdmin, authController.s
  *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: userId, required: true, schema: { type: integer } }]
  *     responses:
- *       200: { description: Đã tính lại, data: { userId, reporter_reliability } }
+ *       200: { description: "Đã tính lại, data: { userId, reporter_reliability }" }
  *       403: { description: Chỉ admin }
  *       404: { description: Không tìm thấy user }
  */

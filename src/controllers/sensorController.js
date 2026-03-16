@@ -189,6 +189,31 @@ const sensorController = {
         } catch (err) {
             res.status(500).json({ success: false, error: err.message });
         }
+    },
+
+    // Calibrate Sensor - ghi nhận lần hiệu chuẩn (cập nhật last_calibrated_at + audit log)
+    calibrateSensor: async (req, res) => {
+        try {
+            const { sensorId } = req.params;
+            const existing = await sensorModel.getSensorById(sensorId);
+            if (!existing) {
+                return res.status(404).json({
+                    success: false,
+                    error: 'Sensor không tồn tại'
+                });
+            }
+            const data = await sensorModel.calibrateSensor(sensorId);
+            if (req.user) {
+                await auditLogRepository.log(req.user.id, 'sensor_calibrated', 'sensor', sensorId, existing.location_name);
+            }
+            res.json({
+                success: true,
+                message: 'Ghi nhận hiệu chuẩn sensor thành công',
+                data
+            });
+        } catch (err) {
+            res.status(500).json({ success: false, error: err.message });
+        }
     }
 };
 

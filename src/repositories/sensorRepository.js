@@ -20,6 +20,7 @@ class SensorRepository extends BaseRepository {
                 s.is_active,
                 s.status,
                 s.last_data_time,
+                s.last_calibrated_at,
                 ST_X(s.coords::geometry) as lng,
                 ST_Y(s.coords::geometry) as lat,
                 t.warning_threshold,
@@ -48,6 +49,7 @@ class SensorRepository extends BaseRepository {
                 s.is_active,
                 s.status,
                 s.last_data_time,
+                s.last_calibrated_at,
                 ST_X(s.coords::geometry) as lng,
                 ST_Y(s.coords::geometry) as lat,
                 t.warning_threshold,
@@ -58,6 +60,17 @@ class SensorRepository extends BaseRepository {
             WHERE s.sensor_id = $1
         `;
         return await this.queryOne(query, [sensorId]);
+    }
+
+    /**
+     * Ghi nhận lần hiệu chuẩn (Calibrate) - cập nhật last_calibrated_at
+     * @param {string} sensorId - ID của sensor
+     */
+    async recordCalibration(sensorId) {
+        await this.query(`
+            UPDATE sensors SET last_calibrated_at = CURRENT_TIMESTAMP WHERE sensor_id = $1
+        `, [sensorId]);
+        return await this.getSensorById(sensorId);
     }
 
     /**

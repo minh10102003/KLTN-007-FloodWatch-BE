@@ -11,7 +11,11 @@
     "migrate:role-constraint": "node scripts/runMigrationRoleConstraint.js",
     "migrate:audit-logs": "node scripts/runMigrationAuditLogs.js",
     "migrate:photo-url": "node scripts/runMigrationPhotoUrl.js",
+    "migrate:content-photo-urls": "node scripts/runMigrationContentPhotoUrls.js",
+    "migrate:temperature-humidity": "node scripts/runMigrationTemperatureHumidity.js",
+    "check:crowd-reports-columns": "node scripts/checkCrowdReportsColumns.js",
     "migrate:reporter-reliability": "node scripts/runMigrationReporterReliability.js",
+    "migrate:last-calibrated": "node scripts/runMigrationLastCalibrated.js",
     "create-admin": "node scripts/createAdminUser.js",
     "check-moderation": "node scripts/checkModerationStatus.js"
   },

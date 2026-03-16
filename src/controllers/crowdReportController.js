@@ -44,7 +44,7 @@ const crowdReportController = {
     // Khách (không đăng nhập): bắt buộc gửi name trong body.
     createReport: async (req, res) => {
         try {
-            const { name, level, lng, lat, photo_url, location_description } = req.body;
+            const { name, level, lng, lat, photo_url, photo_urls, location_description, content } = req.body;
             
             // Validate: level, lng, lat luôn bắt buộc
             if (!level || lng == null || lat == null) {
@@ -70,6 +70,25 @@ const crowdReportController = {
                 });
             }
             
+            // Nội dung mô tả (tùy chọn, tối đa 500 ký tự)
+            const contentTrimmed = (content != null && typeof content === 'string') ? content.trim() : '';
+            if (contentTrimmed.length > 500) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: "Nội dung mô tả mức độ ngập tối đa 500 ký tự" 
+                });
+            }
+            
+            // Ảnh: photo_url = ảnh đầu (tương thích), photo_urls = mảng (tối đa 5)
+            const urlsArray = Array.isArray(photo_urls) ? photo_urls.filter(u => u != null && String(u).trim()) : [];
+            const photoUrlFinal = photo_url || (urlsArray[0] || null);
+            if (urlsArray.length > 5) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: "Tối đa 5 ảnh cho mỗi báo cáo" 
+                });
+            }
+            
             // Lấy reporter_id từ token nếu user đã đăng nhập
             const reporter_id = req.user ? String(req.user.id) : null;
             
@@ -86,8 +105,10 @@ const crowdReportController = {
                 level, 
                 lng, 
                 lat, 
-                photo_url,
-                location_description
+                photoUrlFinal,
+                location_description,
+                contentTrimmed || null,
+                urlsArray.length > 0 ? urlsArray : null
             );
             
             let message = "Cảm ơn bạn đã báo cáo!";

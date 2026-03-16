@@ -3,6 +3,23 @@ const userModel = require('../models/userModel');
 const { withFullPhotoUrls } = require('../utils/photoUrl');
 
 const reportModerationController = {
+    // Lấy tất cả báo cáo (kể cả cũ) - Admin/Moderator, không giới hạn theo thời gian
+    getAllReports: async (req, res) => {
+        try {
+            const { limit, moderation_status } = req.query;
+            const data = await crowdReportRepository.getAllReports(
+                parseInt(limit) || 500,
+                moderation_status || null
+            );
+            res.json({
+                success: true,
+                data: withFullPhotoUrls(req, data)
+            });
+        } catch (err) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    },
+
     // Lấy báo cáo cần kiểm duyệt (trả photo_url full URL để Admin/Mod xem được ảnh)
     getPendingReports: async (req, res) => {
         try {

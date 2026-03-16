@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const alertController = require('../controllers/alertController');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, requireModerator } = require('../middleware/auth');
 
 /**
  * @swagger
@@ -237,7 +237,7 @@ router.get('/:alertId', authenticate, alertController.getAlertById);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.put('/:alertId/acknowledge', authenticate, alertController.acknowledgeAlert);
+router.put('/:alertId/acknowledge', authenticate, requireModerator, alertController.acknowledgeAlert);
 
 /**
  * @swagger
@@ -278,7 +278,7 @@ router.put('/:alertId/acknowledge', authenticate, alertController.acknowledgeAle
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.put('/:alertId/resolve', authenticate, alertController.resolveAlert);
+router.put('/:alertId/resolve', authenticate, requireModerator, alertController.resolveAlert);
 
 module.exports = router;
 

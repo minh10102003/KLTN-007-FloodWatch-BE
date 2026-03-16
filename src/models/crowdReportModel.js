@@ -11,8 +11,8 @@ const crowdReportModel = {
     },
 
     // Tạo báo cáo mới từ người dân với xác minh chéo
-    createReport: async (name, reporterId, level, lng, lat, photoUrl = null, locationDescription = null) => {
-        return await crowdReportRepository.createReport(name, reporterId, level, lng, lat, photoUrl, locationDescription);
+    createReport: async (name, reporterId, level, lng, lat, photoUrl = null, locationDescription = null, content = null, photoUrls = null) => {
+        return await crowdReportRepository.createReport(name, reporterId, level, lng, lat, photoUrl, locationDescription, content, photoUrls);
     },
 
     // Lấy tất cả báo cáo (không giới hạn thời gian) - DEPRECATED: Dùng getUserReports thay thế

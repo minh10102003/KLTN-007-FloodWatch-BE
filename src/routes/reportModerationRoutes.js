@@ -1,7 +1,49 @@
 const express = require('express');
 const router = express.Router();
 const reportModerationController = require('../controllers/reportModerationController');
-const { authenticate, requireModerator } = require('../middleware/auth');
+const { authenticate, requireModerator, requireAdminOrModerator } = require('../middleware/auth');
+
+/**
+ * @swagger
+ * /api/reports/all:
+ *   get:
+ *     summary: Lấy tất cả báo cáo (Admin/Moderator) - kể cả báo cáo cũ
+ *     description: Không giới hạn theo thời gian. Dùng để xem lại toàn bộ báo cáo đã duyệt/từ chối/pending.
+ *     tags: [Report Moderation]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 500
+ *           minimum: 1
+ *           maximum: 2000
+ *         description: Số lượng báo cáo tối đa
+ *       - in: query
+ *         name: moderation_status
+ *         schema:
+ *           type: string
+ *           enum: [pending, approved, rejected]
+ *         description: Lọc theo trạng thái kiểm duyệt
+ *     responses:
+ *       200:
+ *         description: Thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/CrowdReport'
+ *       403:
+ *         description: Chỉ admin hoặc moderator
+ */
+router.get('/all', authenticate, requireAdminOrModerator, reportModerationController.getAllReports);
 
 /**
  * @swagger

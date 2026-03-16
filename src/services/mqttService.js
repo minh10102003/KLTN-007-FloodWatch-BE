@@ -165,7 +165,7 @@ const init = () => {
     client.on('message', async (topic, message) => {
         try {
             const data = JSON.parse(message.toString());
-            const { sensor_id, value, checksum, timestamp } = data;
+            const { sensor_id, value, checksum, timestamp, temperature, humidity } = data;
             
             // 1. Kiểm tra checksum (nếu có)
             if (checksum && !validateChecksum({ sensor_id, value, timestamp }, checksum)) {
@@ -203,13 +203,15 @@ const init = () => {
             // 7. Xác định trạng thái
             const status = await determineStatus(sensor_id, waterLevel);
             
-            // 8. Lưu vào flood_logs
+            // 8. Lưu vào flood_logs (kèm temperature, humidity từ DHT22 nếu có)
             await floodRepository.createFloodLog({
                 sensor_id,
                 raw_distance: filteredDistance,
                 water_level: waterLevel,
                 velocity,
-                status
+                status,
+                temperature: temperature != null ? parseFloat(temperature) : undefined,
+                humidity: humidity != null ? parseFloat(humidity) : undefined
             });
             
             // 9. Cập nhật health check cho sensor
@@ -238,7 +240,9 @@ const init = () => {
                 }
             }
             
-            console.log(`💾 [Data] ${sensor_id}: ${waterLevel.toFixed(2)}cm (${status})${velocity !== null ? `, velocity: ${velocity}cm/min` : ''}`);
+            const tempStr = temperature != null ? `, temp: ${parseFloat(temperature).toFixed(1)}°C` : '';
+            const humStr = humidity != null ? `, humidity: ${parseFloat(humidity).toFixed(0)}%` : '';
+            console.log(`💾 [Data] ${sensor_id}: ${waterLevel.toFixed(2)}cm (${status})${velocity !== null ? `, velocity: ${velocity}cm/min` : ''}${tempStr}${humStr}`);
         } catch (err) {
             console.error('❌ [MQTT] Error processing data:', err.message);
         }

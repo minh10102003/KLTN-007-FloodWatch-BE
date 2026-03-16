@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const statsController = require('../controllers/statsController');
-const { authenticate, requireAdmin, requireModerator } = require('../middleware/auth');
+const { authenticate, requireAdmin, requireModerator, requireAdminOrModerator } = require('../middleware/auth');
 
 /**
  * @swagger
@@ -76,8 +76,8 @@ router.get('/stats/online-users', authenticate, requireAdmin, statsController.ge
  * @swagger
  * /api/stats/reports:
  *   get:
- *     summary: Thống kê báo cáo theo giờ/ngày (Moderator/Admin)
- *     description: Dùng cho biểu đồ lượng tin báo tại các điểm đen ngập Bình Thạnh.
+ *     summary: Thống kê báo cáo theo giờ/ngày (Admin hoặc Moderator)
+ *     description: Dùng cho biểu đồ lượng tin báo tại các điểm đen ngập Bình Thạnh. Cho phép role Admin hoặc Moderator.
  *     tags: [Stats]
  *     security:
  *       - bearerAuth: []
@@ -109,11 +109,11 @@ router.get('/stats/online-users', authenticate, requireAdmin, statsController.ge
  *                     groupBy: { type: string }
  *                     series: { type: array, items: { type: object, properties: { period: {}, count: { type: integer } } } }
  *       403:
- *         description: Chỉ moderator hoặc admin
+ *         description: Chỉ admin hoặc moderator
  *       500:
  *         description: Lỗi server
  */
-router.get('/stats/reports', authenticate, requireModerator, statsController.getReportStats);
+router.get('/stats/reports', authenticate, requireAdminOrModerator, statsController.getReportStats);
 
 /**
  * @swagger

@@ -17,6 +17,8 @@ class FloodRepository extends BaseRepository {
                 water_level,
                 velocity,
                 status,
+                temperature,
+                humidity,
                 created_at
             FROM flood_logs
             ORDER BY created_at DESC
@@ -38,6 +40,8 @@ class FloodRepository extends BaseRepository {
                 l.water_level,
                 l.velocity,
                 l.status as log_status,
+                l.temperature,
+                l.humidity,
                 l.created_at,
                 ST_X(s.coords::geometry) as lng,
                 ST_Y(s.coords::geometry) as lat,
@@ -66,6 +70,8 @@ class FloodRepository extends BaseRepository {
                 l.water_level,
                 l.velocity,
                 l.status as log_status,
+                l.temperature,
+                l.humidity,
                 l.created_at,
                 ST_X(s.coords::geometry) as lng,
                 ST_Y(s.coords::geometry) as lat,
@@ -95,6 +101,8 @@ class FloodRepository extends BaseRepository {
                 water_level,
                 velocity,
                 status,
+                temperature,
+                humidity,
                 created_at
             FROM flood_logs
             WHERE sensor_id = $1
@@ -114,15 +122,25 @@ class FloodRepository extends BaseRepository {
             raw_distance,
             water_level,
             velocity,
-            status
+            status,
+            temperature,
+            humidity
         } = floodData;
 
         const query = `
-            INSERT INTO flood_logs (sensor_id, raw_distance, water_level, velocity, status)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO flood_logs (sensor_id, raw_distance, water_level, velocity, status, temperature, humidity)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING *
         `;
-        return await this.queryOne(query, [sensor_id, raw_distance, water_level, velocity, status]);
+        return await this.queryOne(query, [
+            sensor_id,
+            raw_distance,
+            water_level,
+            velocity,
+            status,
+            temperature != null ? parseFloat(temperature) : null,
+            humidity != null ? parseFloat(humidity) : null
+        ]);
     }
 
     /**
@@ -138,6 +156,8 @@ class FloodRepository extends BaseRepository {
                 water_level,
                 velocity,
                 status,
+                temperature,
+                humidity,
                 created_at
             FROM flood_logs
             WHERE sensor_id = $1

@@ -49,7 +49,9 @@ const floodController = {
                     warning_threshold: item.warning_threshold || 10,
                     danger_threshold: item.danger_threshold || 30,
                     last_data_time: item.last_data_time,
-                    created_at: item.created_at
+                    created_at: item.created_at,
+                    temperature: item.temperature != null ? parseFloat(item.temperature) : null,
+                    humidity: item.humidity != null ? parseFloat(item.humidity) : null
                 };
             });
             

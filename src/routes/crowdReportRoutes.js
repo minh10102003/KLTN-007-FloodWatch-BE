@@ -142,10 +142,25 @@ router.get('/crowd-reports/all', authenticate, crowdReportController.getAllRepor
  *                 format: float
  *                 example: 10.798
  *                 description: Latitude
+ *               content:
+ *                 type: string
+ *                 maxLength: 500
+ *                 description: Nội dung mô tả mức độ ngập (tùy chọn, tối đa 500 ký tự)
  *               photo_url:
  *                 type: string
  *                 format: uri
+ *                 description: URL ảnh đầu (tương thích). Nếu gửi photo_urls thì ảnh đầu cũng nên trùng phần tử đầu.
  *                 example: https://example.com/photo.jpg
+ *               photo_urls:
+ *                 type: array
+ *                 maxItems: 5
+ *                 items:
+ *                   type: string
+ *                   format: uri
+ *                 description: Mảng URL tối đa 5 ảnh (mở rộng). BE lưu photo_url = ảnh đầu, photo_urls = mảng đủ.
+ *               location_description:
+ *                 type: string
+ *                 description: Mô tả vị trí (tùy chọn)
  *     responses:
  *       200:
  *         description: Tạo báo cáo thành công

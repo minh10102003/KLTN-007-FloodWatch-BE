@@ -56,6 +56,12 @@ const floodController = require('../controllers/floodController');
 router.get('/v1/flood-data/realtime', floodController.getRealTimeFloodData);
 
 /**
+ * GET /api/flood-data/realtime – Endpoint chính để FE lấy dữ liệu real-time (mực nước + nhiệt độ + độ ẩm)
+ * Trả về bản ghi mới nhất mỗi sensor, có temperature (°C) và humidity (%) từ DHT22 (null nếu chưa có).
+ */
+router.get('/flood-data/realtime', floodController.getRealTimeFloodData);
+
+/**
  * @swagger
  * /api/v1/flood-data:
  *   get:

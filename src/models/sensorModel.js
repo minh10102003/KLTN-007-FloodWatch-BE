@@ -33,6 +33,11 @@ const sensorModel = {
     // Xóa sensor
     deleteSensor: async (sensorId) => {
         return await sensorRepository.deleteSensor(sensorId);
+    },
+
+    // Ghi nhận Calibrate Sensor (cập nhật last_calibrated_at)
+    calibrateSensor: async (sensorId) => {
+        return await sensorRepository.recordCalibration(sensorId);
     }
 };
 

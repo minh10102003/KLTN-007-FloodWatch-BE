@@ -1,6 +1,15 @@
 const jwt = require('jsonwebtoken');
 
 /**
+ * Kiểm tra user có role (hỗ trợ cả role đơn và mảng roles khi mở rộng).
+ */
+const hasRole = (user, roleName) => {
+    if (!user) return false;
+    if (Array.isArray(user.roles)) return user.roles.includes(roleName);
+    return user.role === roleName;
+};
+
+/**
  * Middleware xác thực JWT
  */
 const authenticate = (req, res, next) => {
@@ -26,10 +35,11 @@ const authenticate = (req, res, next) => {
 };
 
 /**
- * Middleware kiểm tra quyền admin
+ * Middleware: Chỉ Admin (Quản trị hạ tầng, người dùng, cấu hình hệ thống).
+ * Admin mặc định KHÔNG có quyền Moderator (phân tách quyền RBAC).
  */
 const requireAdmin = (req, res, next) => {
-    if (req.user.role !== 'admin') {
+    if (!hasRole(req.user, 'admin')) {
         return res.status(403).json({
             success: false,
             error: 'Chỉ admin mới có quyền thực hiện thao tác này'
@@ -39,10 +49,24 @@ const requireAdmin = (req, res, next) => {
 };
 
 /**
- * Middleware kiểm tra quyền admin hoặc moderator
+ * Middleware: Chỉ Moderator (Kiểm duyệt nội dung, cảnh báo, thống kê nghiệp vụ).
+ * Admin không kế thừa quyền moderator. Nếu cần cả hai, tài khoản phải có đồng thời 2 role.
  */
 const requireModerator = (req, res, next) => {
-    if (!['admin', 'moderator'].includes(req.user.role)) {
+    if (!hasRole(req.user, 'moderator')) {
+        return res.status(403).json({
+            success: false,
+            error: 'Chỉ moderator mới có quyền thực hiện thao tác này'
+        });
+    }
+    next();
+};
+
+/**
+ * Middleware: Cho phép Admin hoặc Moderator (dùng cho endpoint cần cả hai role).
+ */
+const requireAdminOrModerator = (req, res, next) => {
+    if (!hasRole(req.user, 'admin') && !hasRole(req.user, 'moderator')) {
         return res.status(403).json({
             success: false,
             error: 'Chỉ admin hoặc moderator mới có quyền thực hiện thao tác này'
@@ -81,6 +105,7 @@ module.exports = {
     authenticate,
     optionalAuthenticate,
     requireAdmin,
-    requireModerator
+    requireModerator,
+    requireAdminOrModerator
 };
 

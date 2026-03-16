@@ -328,6 +328,45 @@ router.put('/:sensorId/thresholds', authenticate, requireAdmin, sensorController
 
 /**
  * @swagger
+ * /api/sensors/{sensorId}/calibrate:
+ *   post:
+ *     summary: Ghi nhận hiệu chuẩn sensor (Calibrate)
+ *     tags: [Sensors]
+ *     parameters:
+ *       - in: path
+ *         name: sensorId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID của sensor
+ *         example: S01
+ *     responses:
+ *       200:
+ *         description: Ghi nhận hiệu chuẩn thành công (cập nhật last_calibrated_at, ghi audit log)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Ghi nhận hiệu chuẩn sensor thành công
+ *                 data:
+ *                   $ref: '#/components/schemas/Sensor'
+ *       404:
+ *         description: Sensor không tồn tại
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.post('/:sensorId/calibrate', authenticate, requireAdmin, sensorController.calibrateSensor);
+
+/**
+ * @swagger
  * /api/sensors/{sensorId}:
  *   delete:
  *     summary: Xóa sensor

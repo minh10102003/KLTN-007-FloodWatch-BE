@@ -32,10 +32,11 @@ swaggerSetup(app);
 // Ghi lượt truy cập mỗi request tới /api (để thống kê hàng tháng)
 app.use('/api', accessLogMiddleware);
 
-// Routes
+// Routes (đặt route cố định /api/audit-logs trước các route có tham số /:id để tránh bị sensorRoutes bắt nhầm)
 app.use('/api', floodRoutes);
 app.use('/api', crowdReportRoutes);
-app.use('/api', sensorRoutes);
+app.use('/api', auditLogRoutes);
+app.use('/api/sensors', sensorRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/alerts', alertRoutes);
 app.use('/api/reports', reportModerationRoutes);
@@ -46,7 +47,6 @@ app.use('/api/ota', otaRoutes);
 app.use('/api/energy', energyRoutes);
 app.use('/api', statsRoutes);
 app.use('/api', uploadRoutes);
-app.use('/api', auditLogRoutes);
 
 module.exports = app;
 

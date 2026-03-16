@@ -13,17 +13,27 @@ function toFullPhotoUrl(req, photoUrl) {
 }
 
 /**
- * Gán lại photo_url (full URL) cho một report hoặc mảng reports (không mutate bản gốc).
+ * Chuẩn hóa một URL (relative → full).
+ */
+function toFullUrl(base, url) {
+    if (!url || typeof url !== 'string') return url || null;
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    return base + (url.startsWith('/') ? url : '/' + url);
+}
+
+/**
+ * Gán lại photo_url và photo_urls (full URL) cho một report hoặc mảng reports (không mutate bản gốc).
  */
 function withFullPhotoUrls(req, data) {
     if (!data) return data;
     const base = req.protocol + '://' + (req.get('host') || '');
     const mapOne = (r) => {
         if (!r) return r;
-        const url = r.photo_url;
-        if (!url) return r;
-        const full = url.startsWith('http') ? url : base + (url.startsWith('/') ? url : '/' + url);
-        return { ...r, photo_url: full };
+        const fullPhotoUrl = toFullUrl(base, r.photo_url) || r.photo_url;
+        const fullPhotoUrls = Array.isArray(r.photo_urls) && r.photo_urls.length > 0
+            ? r.photo_urls.map(u => toFullUrl(base, u))
+            : (r.photo_urls || []);
+        return { ...r, photo_url: fullPhotoUrl, photo_urls: fullPhotoUrls };
     };
     return Array.isArray(data) ? data.map(mapOne) : mapOne(data);
 }

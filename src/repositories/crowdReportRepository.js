@@ -21,6 +21,8 @@ class CrowdReportRepository extends BaseRepository {
                 validation_status,
                 verified_by_sensor,
                 photo_url,
+                content,
+                photo_urls,
                 moderation_status,
                 moderated_by,
                 moderated_at,
@@ -64,6 +66,8 @@ class CrowdReportRepository extends BaseRepository {
                 validation_status,
                 verified_by_sensor,
                 photo_url,
+                content,
+                photo_urls,
                 moderation_status,
                 moderated_by,
                 moderated_at,
@@ -125,6 +129,8 @@ class CrowdReportRepository extends BaseRepository {
                 validation_status,
                 verified_by_sensor,
                 photo_url,
+                content,
+                photo_urls,
                 moderation_status,
                 moderated_by,
                 moderated_at,
@@ -194,6 +200,8 @@ class CrowdReportRepository extends BaseRepository {
                 validation_status,
                 verified_by_sensor,
                 photo_url,
+                content,
+                photo_urls,
                 ST_X(location::geometry) as lng, 
                 ST_Y(location::geometry) as lat, 
                 created_at 
@@ -247,6 +255,8 @@ class CrowdReportRepository extends BaseRepository {
                 validation_status,
                 verified_by_sensor,
                 photo_url,
+                content,
+                photo_urls,
                 moderation_status,
                 moderated_by,
                 moderated_at,
@@ -278,10 +288,12 @@ class CrowdReportRepository extends BaseRepository {
      * @param {string} level - Mức độ ngập (Nhẹ, Trung bình, Nặng)
      * @param {number} lng - Longitude
      * @param {number} lat - Latitude
-     * @param {string} photoUrl - URL của ảnh (optional)
+     * @param {string} photoUrl - URL ảnh đầu (tương thích BE cũ)
      * @param {string} locationDescription - Mô tả vị trí (optional)
+     * @param {string} content - Nội dung mô tả mức độ ngập, tối đa 500 ký tự (optional)
+     * @param {string[]} photoUrls - Mảng URL ảnh, tối đa 5 (optional)
      */
-    async createReport(name, reporterId, level, lng, lat, photoUrl = null, locationDescription = null) {
+    async createReport(name, reporterId, level, lng, lat, photoUrl = null, locationDescription = null, content = null, photoUrls = null) {
         // 1. Kiểm tra có sensor trong 500m không – không có thì không cho tạo báo cáo (đặc tả)
         const validation = await this.crossValidateWithSensors(lng, lat, level);
         if (validation.noSensor) {
@@ -299,6 +311,7 @@ class CrowdReportRepository extends BaseRepository {
         }
         
         // 3. Tạo báo cáo (đã có sensor trong 500m)
+        const urlsArray = Array.isArray(photoUrls) && photoUrls.length > 0 ? photoUrls : (photoUrl ? [photoUrl] : []);
         const query = `
             INSERT INTO crowd_reports (
                 reporter_name, 
@@ -308,22 +321,26 @@ class CrowdReportRepository extends BaseRepository {
                 reliability_score,
                 validation_status,
                 verified_by_sensor,
-                photo_url
+                photo_url,
+                content,
+                photo_urls
             )
-            VALUES ($1, $2, $3, ST_SetSRID(ST_MakePoint($4, $5), 4326)::geography, $6, $7, $8, $9)
+            VALUES ($1, $2, $3, ST_SetSRID(ST_MakePoint($4, $5), 4326)::geography, $6, $7, $8, $9, $10, $11::jsonb)
             RETURNING id, validation_status, verified_by_sensor
         `;
         
         const result = await this.queryOne(query, [
             name,
-            reporterId || null, // Đảm bảo không bao giờ là undefined, luôn là number hoặc null
+            reporterId || null,
             level,
             lng,
             lat,
             reliabilityScore,
             validation.validation_status || 'pending',
             validation.verified || false,
-            photoUrl
+            photoUrl || (urlsArray[0] || null),
+            content && String(content).trim() || null,
+            JSON.stringify(urlsArray)
         ]);
         
         // 4. Cập nhật điểm tin cậy nếu được xác minh
