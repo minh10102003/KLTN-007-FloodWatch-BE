@@ -71,11 +71,39 @@
     <script>
         const API = '/api/auth';
         let token = localStorage.getItem('token');
+        let refreshToken = localStorage.getItem('refresh_token');
+        let sessionToken = localStorage.getItem('session_token');
         let profileIcons = [];
         let selectedIconName = null;
 
+        function persistAuthPayload(d) {
+            token = d.access_token || d.token || token;
+            if (d.refresh_token) refreshToken = d.refresh_token;
+            if (d.session_token) sessionToken = d.session_token;
+            if (token) localStorage.setItem('token', token);
+            if (refreshToken) localStorage.setItem('refresh_token', refreshToken);
+            if (sessionToken) localStorage.setItem('session_token', sessionToken);
+        }
+
         function getHeaders() {
             return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
+        }
+
+        async function tryRefreshAccess() {
+            if (!refreshToken || !sessionToken) return false;
+            try {
+                const res = await fetch(API + '/refresh', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ refresh_token: refreshToken, session_token: sessionToken })
+                });
+                const data = await res.json();
+                if (data.success && data.data) {
+                    persistAuthPayload(data.data);
+                    return true;
+                }
+            } catch (e) {}
+            return false;
         }
 
         function show(el) { el.style.display = ''; }
@@ -97,9 +125,8 @@
                     body: JSON.stringify({ username, password })
                 });
                 const data = await res.json();
-                if (data.success && data.data.token) {
-                    token = data.data.token;
-                    localStorage.setItem('token', token);
+                if (data.success && (data.data.token || data.data.access_token)) {
+                    persistAuthPayload(data.data);
                     hide(document.getElementById('loginSection'));
                     show(document.getElementById('profileSection'));
                     loadProfile();
@@ -113,7 +140,10 @@
 
         async function loadProfile() {
             try {
-                const res = await fetch(API + '/profile', { headers: getHeaders() });
+                let res = await fetch(API + '/profile', { headers: getHeaders() });
+                if (res.status === 401 && await tryRefreshAccess()) {
+                    res = await fetch(API + '/profile', { headers: getHeaders() });
+                }
                 const data = await res.json();
                 if (!res.ok || !data.success) {
                     if (res.status === 401) { logout(); return; }
@@ -132,16 +162,26 @@
             } catch (e) {}
         }
 
-        function logout() {
-            token = null;
+        async function logout() {
+            if (token) {
+                try {
+                    await fetch(API + '/logout', { method: 'POST', headers: getHeaders() });
+                } catch (e) {}
+            }
+            token = refreshToken = sessionToken = null;
             localStorage.removeItem('token');
+            localStorage.removeItem('refresh_token');
+            localStorage.removeItem('session_token');
             show(document.getElementById('loginSection'));
             hide(document.getElementById('profileSection'));
         }
 
         async function loadProfileIcons() {
             try {
-                const res = await fetch(API + '/profile-icons', { headers: getHeaders() });
+                let res = await fetch(API + '/profile-icons', { headers: getHeaders() });
+                if (res.status === 401 && await tryRefreshAccess()) {
+                    res = await fetch(API + '/profile-icons', { headers: getHeaders() });
+                }
                 const data = await res.json();
                 if (data.success && data.data) profileIcons = data.data;
             } catch (e) {}
@@ -169,11 +209,18 @@
         async function saveAvatar() {
             if (!selectedIconName) return;
             try {
-                const res = await fetch(API + '/profile', {
+                let res = await fetch(API + '/profile', {
                     method: 'PUT',
                     headers: getHeaders(),
                     body: JSON.stringify({ avatar: selectedIconName })
                 });
+                if (res.status === 401 && await tryRefreshAccess()) {
+                    res = await fetch(API + '/profile', {
+                        method: 'PUT',
+                        headers: getHeaders(),
+                        body: JSON.stringify({ avatar: selectedIconName })
+                    });
+                }
                 const data = await res.json();
                 if (data.success) {
                     document.getElementById('avatarModal').classList.remove('show');
@@ -197,7 +244,10 @@
 
         if (token) {
             (async () => {
-                const res = await fetch(API + '/profile', { headers: getHeaders() });
+                let res = await fetch(API + '/profile', { headers: getHeaders() });
+                if (res.status === 401 && await tryRefreshAccess()) {
+                    res = await fetch(API + '/profile', { headers: getHeaders() });
+                }
                 if (res.ok) {
                     const data = await res.json();
                     if (data.success) {
@@ -207,7 +257,7 @@
                         return;
                     }
                 }
-                logout();
+                await logout();
             })();
         }
     </script>

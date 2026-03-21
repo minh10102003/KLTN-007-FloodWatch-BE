@@ -1,4 +1,5 @@
-const jwt = require('jsonwebtoken');
+const { verifyAccessToken } = require('../services/tokenService');
+const userSessionRepository = require('../repositories/userSessionRepository');
 
 /**
  * Kiểm tra user có role (hỗ trợ cả role đơn và mảng roles khi mở rộng).
@@ -10,12 +11,12 @@ const hasRole = (user, roleName) => {
 };
 
 /**
- * Middleware xác thực JWT
+ * Middleware: JWT access + phiên (user_sessions) còn hiệu lực
  */
-const authenticate = (req, res, next) => {
+const authenticate = async (req, res, next) => {
     try {
         const token = req.headers.authorization?.split(' ')[1]; // Bearer <token>
-        
+
         if (!token) {
             return res.status(401).json({
                 success: false,
@@ -23,10 +24,34 @@ const authenticate = (req, res, next) => {
             });
         }
 
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+        let decoded;
+        try {
+            decoded = verifyAccessToken(token);
+        } catch {
+            return res.status(401).json({
+                success: false,
+                error: 'Token không hợp lệ hoặc đã hết hạn'
+            });
+        }
+
+        if (decoded.typ !== 'access' || !decoded.sid) {
+            return res.status(401).json({
+                success: false,
+                error: 'Token không hợp lệ'
+            });
+        }
+
+        const active = await userSessionRepository.isSessionActive(decoded.sid, decoded.id);
+        if (!active) {
+            return res.status(401).json({
+                success: false,
+                error: 'Phiên đăng nhập đã hết hạn hoặc đã đăng xuất'
+            });
+        }
+
         req.user = decoded;
         next();
-    } catch (err) {
+    } catch {
         return res.status(401).json({
             success: false,
             error: 'Token không hợp lệ hoặc đã hết hạn'
@@ -76,26 +101,34 @@ const requireAdminOrModerator = (req, res, next) => {
 };
 
 /**
- * Middleware xác thực JWT (optional - không bắt buộc)
- * Nếu có token hợp lệ, set req.user; nếu không, req.user = null
+ * Middleware optional: access JWT + phiên hợp lệ thì set req.user, không thì null
  */
-const optionalAuthenticate = (req, res, next) => {
+const optionalAuthenticate = async (req, res, next) => {
     try {
         const token = req.headers.authorization?.split(' ')[1]; // Bearer <token>
-        
-        if (token) {
-            try {
-                const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
-                req.user = decoded;
-            } catch (err) {
-                // Token không hợp lệ, nhưng không throw error (optional)
-                req.user = null;
-            }
-        } else {
+
+        if (!token) {
             req.user = null;
+            return next();
         }
+
+        let decoded;
+        try {
+            decoded = verifyAccessToken(token);
+        } catch {
+            req.user = null;
+            return next();
+        }
+
+        if (decoded.typ !== 'access' || !decoded.sid) {
+            req.user = null;
+            return next();
+        }
+
+        const active = await userSessionRepository.isSessionActive(decoded.sid, decoded.id);
+        req.user = active ? decoded : null;
         next();
-    } catch (err) {
+    } catch {
         req.user = null;
         next();
     }

@@ -33,7 +33,8 @@ const options = {
                     type: 'http',
                     scheme: 'bearer',
                     bearerFormat: 'JWT',
-                    description: 'Nhập JWT token từ đăng nhập'
+                    description:
+                        'JWT access từ login/register (hoặc /api/auth/refresh). Khi hết hạn, gọi POST /api/auth/refresh với refresh_token + session_token.'
                 }
             },
             schemas: {

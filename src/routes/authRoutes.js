@@ -56,9 +56,19 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
  *                   properties:
  *                     user:
  *                       $ref: '#/components/schemas/User'
+ *                     access_token:
+ *                       type: string
+ *                       description: JWT access (ngắn hạn), header Authorization Bearer
+ *                     refresh_token:
+ *                       type: string
+ *                       description: Dùng cho POST /api/auth/refresh (lưu an toàn, không log)
+ *                     session_token:
+ *                       type: string
+ *                       format: uuid
+ *                       description: Định danh phiên đăng nhập (gửi kèm khi refresh)
  *                     token:
  *                       type: string
- *                       example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+ *                       description: Alias của access_token (tương thích client cũ)
  *       400:
  *         description: Lỗi validation hoặc username/email đã tồn tại
  *         content:
@@ -85,8 +95,8 @@ router.post('/register', authController.register);
  *       - Username: `user123`
  *       - Password: `password123`
  *       
- *       Sau khi đăng nhập thành công, token JWT sẽ được trả về trong response.
- *       Sử dụng token này để xác thực các API cần authentication (thêm header `Authorization: Bearer <token>`).
+ *       Trả về **access_token** (JWT ngắn hạn), **refresh_token** và **session_token** (UUID phiên).
+ *       Gửi access_token qua header `Authorization: Bearer <access_token>`. Khi 401 do hết hạn access, gọi `POST /api/auth/refresh`.
  *     requestBody:
  *       required: true
  *       content:
@@ -136,10 +146,17 @@ router.post('/register', authController.register);
  *                   properties:
  *                     user:
  *                       $ref: '#/components/schemas/User'
+ *                     access_token:
+ *                       type: string
+ *                     refresh_token:
+ *                       type: string
+ *                     session_token:
+ *                       type: string
+ *                       format: uuid
  *                     token:
  *                       type: string
- *                       description: JWT token để sử dụng cho các API cần authentication
- *                       example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTY5OTk5OTk5OSwiZXhwIjoxNzAwNTk5OTk5fQ.example
+ *                       description: Alias access_token
+ *                       example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
  *             examples:
  *               admin:
  *                 summary: Response khi đăng nhập Admin
@@ -154,6 +171,9 @@ router.post('/register', authController.register);
  *                       full_name: System Administrator
  *                       role: admin
  *                       is_active: true
+ *                     access_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+ *                     refresh_token: base64url...
+ *                     session_token: 550e8400-e29b-41d4-a716-446655440000
  *                     token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
  *               user:
  *                 summary: Response khi đăng nhập User
@@ -168,6 +188,9 @@ router.post('/register', authController.register);
  *                       full_name: Nguyễn Văn A
  *                       role: user
  *                       is_active: true
+ *                     access_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+ *                     refresh_token: base64url...
+ *                     session_token: 550e8400-e29b-41d4-a716-446655440001
  *                     token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
  *       400:
  *         description: Thiếu thông tin username hoặc password
@@ -200,6 +223,48 @@ router.post('/register', authController.register);
  *                   error: Tài khoản đã bị vô hiệu hóa
  */
 router.post('/login', authController.login);
+
+/**
+ * @swagger
+ * /api/auth/refresh:
+ *   post:
+ *     summary: Làm mới access JWT bằng refresh token
+ *     tags: [Authentication]
+ *     description: |
+ *       Mỗi lần gọi thành công, server trả refresh_token mới (rotation). Client phải lưu cả access_token và refresh_token mới.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [refresh_token, session_token]
+ *             properties:
+ *               refresh_token:
+ *                 type: string
+ *               session_token:
+ *                 type: string
+ *                 format: uuid
+ *     responses:
+ *       200:
+ *         description: Token mới
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     access_token: { type: string }
+ *                     refresh_token: { type: string }
+ *                     session_token: { type: string, format: uuid }
+ *                     token: { type: string, description: alias access_token }
+ *       401:
+ *         description: Refresh/session không hợp lệ hoặc hết hạn
+ */
+router.post('/refresh', authController.refresh);
 
 /**
  * @swagger

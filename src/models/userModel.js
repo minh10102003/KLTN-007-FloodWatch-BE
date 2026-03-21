@@ -1,12 +1,38 @@
 const userRepository = require('../repositories/userRepository');
+const userSessionRepository = require('../repositories/userSessionRepository');
 const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
+const {
+    getRefreshExpiresMs,
+    hashRefreshToken,
+    generateRefreshToken,
+    signAccessToken,
+    refreshHashesEqual
+} = require('../services/tokenService');
 
 /**
  * User Model
  * Sử dụng UserRepository để thực hiện các thao tác với database
  */
 const userModel = {
+    async _issueTokensForUser(user) {
+        const refreshToken = generateRefreshToken();
+        const refreshHash = hashRefreshToken(refreshToken);
+        const expiresAt = new Date(Date.now() + getRefreshExpiresMs());
+        const session = await userSessionRepository.createSession(user.id, refreshHash, expiresAt);
+        const access_token = signAccessToken({
+            id: user.id,
+            username: user.username,
+            role: user.role,
+            sid: session.id
+        });
+        return {
+            access_token,
+            refresh_token: refreshToken,
+            session_token: session.id,
+            token: access_token
+        };
+    },
+
     /**
      * Đăng ký user mới
      */
@@ -38,14 +64,8 @@ const userModel = {
             role: 'user'
         });
 
-        // Tạo JWT token
-        const token = jwt.sign(
-            { id: user.id, username: user.username, role: user.role },
-            process.env.JWT_SECRET || 'your-secret-key',
-            { expiresIn: '7d' }
-        );
-
-        return { user, token };
+        const tokens = await this._issueTokensForUser(user);
+        return { user, ...tokens };
     },
 
     /**
@@ -96,17 +116,55 @@ const userModel = {
         // Cập nhật last_login
         await userRepository.updateLastLogin(user.id);
 
-        // Tạo JWT token
-        const token = jwt.sign(
-            { id: user.id, username: user.username, role: user.role },
-            process.env.JWT_SECRET || 'your-secret-key',
-            { expiresIn: '7d' }
-        );
-
         // Loại bỏ password_hash khỏi response
         delete user.password_hash;
 
-        return { user, token };
+        const tokens = await this._issueTokensForUser(user);
+        return { user, ...tokens };
+    },
+
+    /**
+     * Làm mới access JWT bằng refresh token + session_token (UUID phiên).
+     * Refresh token được rotate mỗi lần gọi.
+     */
+    async refreshTokens(sessionToken, refreshTokenPlain) {
+        if (!sessionToken || !refreshTokenPlain) {
+            throw new Error('Thiếu session_token hoặc refresh_token');
+        }
+        const session = await userSessionRepository.findById(sessionToken);
+        if (!session || session.revoked_at) {
+            throw new Error('Phiên đăng nhập không hợp lệ');
+        }
+        if (new Date(session.expires_at) <= new Date()) {
+            throw new Error('Refresh token đã hết hạn');
+        }
+        const incomingHash = hashRefreshToken(refreshTokenPlain);
+        if (!refreshHashesEqual(session.refresh_token_hash, incomingHash)) {
+            throw new Error('Refresh token không hợp lệ');
+        }
+        const user = await userRepository.findById(session.user_id);
+        if (!user || !user.is_active) {
+            throw new Error('Tài khoản không hợp lệ');
+        }
+        const newRefresh = generateRefreshToken();
+        const newHash = hashRefreshToken(newRefresh);
+        const expiresAt = new Date(Date.now() + getRefreshExpiresMs());
+        const updated = await userSessionRepository.updateRefreshToken(sessionToken, newHash, expiresAt);
+        if (!updated) {
+            throw new Error('Phiên đăng nhập không hợp lệ');
+        }
+        const access_token = signAccessToken({
+            id: user.id,
+            username: user.username,
+            role: user.role,
+            sid: sessionToken
+        });
+        return {
+            access_token,
+            refresh_token: newRefresh,
+            session_token: sessionToken,
+            token: access_token
+        };
     },
 
     /**
@@ -140,7 +198,9 @@ const userModel = {
         // Hash password mới
         const newPasswordHash = await bcrypt.hash(newPassword, 10);
 
-        return await userRepository.changePassword(userId, newPasswordHash);
+        const updated = await userRepository.changePassword(userId, newPasswordHash);
+        await userSessionRepository.revokeAllForUser(userId);
+        return updated;
     },
 
     /**
@@ -180,10 +240,14 @@ const userModel = {
     },
 
     /**
-     * Đăng xuất: set is_online = false
+     * Đăng xuất: thu hồi phiên (session) và set is_online = false
      * @param {number} userId - User ID
+     * @param {string} [sessionId] - UUID phiên (từ JWT sid)
      */
-    async logout(userId) {
+    async logout(userId, sessionId) {
+        if (sessionId) {
+            await userSessionRepository.revokeSession(sessionId);
+        }
         return await userRepository.setOnline(userId, false);
     },
 

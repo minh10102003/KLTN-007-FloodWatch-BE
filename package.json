@@ -16,6 +16,7 @@
     "check:crowd-reports-columns": "node scripts/checkCrowdReportsColumns.js",
     "migrate:reporter-reliability": "node scripts/runMigrationReporterReliability.js",
     "migrate:last-calibrated": "node scripts/runMigrationLastCalibrated.js",
+    "migrate:user-sessions": "node scripts/runMigrationUserSessions.js",
     "create-admin": "node scripts/createAdminUser.js",
     "check-moderation": "node scripts/checkModerationStatus.js"
   },

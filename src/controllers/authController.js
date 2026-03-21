@@ -33,7 +33,13 @@ const authController = {
             res.status(201).json({
                 success: true,
                 message: 'Đăng ký thành công',
-                data: result
+                data: {
+                    user: result.user,
+                    access_token: result.access_token,
+                    refresh_token: result.refresh_token,
+                    session_token: result.session_token,
+                    token: result.token
+                }
             });
         } catch (err) {
             res.status(400).json({
@@ -60,7 +66,33 @@ const authController = {
             res.json({
                 success: true,
                 message: 'Đăng nhập thành công',
-                data: result
+                data: {
+                    user: result.user,
+                    access_token: result.access_token,
+                    refresh_token: result.refresh_token,
+                    session_token: result.session_token,
+                    token: result.token
+                }
+            });
+        } catch (err) {
+            res.status(401).json({
+                success: false,
+                error: err.message
+            });
+        }
+    },
+
+    /**
+     * Làm mới access JWT (body: refresh_token, session_token). Refresh token rotate mỗi lần.
+     */
+    refresh: async (req, res) => {
+        try {
+            const { refresh_token, session_token } = req.body;
+            const tokens = await userModel.refreshTokens(session_token, refresh_token);
+            res.json({
+                success: true,
+                message: 'Làm mới token thành công',
+                data: tokens
             });
         } catch (err) {
             res.status(401).json({
@@ -132,10 +164,10 @@ const authController = {
         }
     },
 
-    // Đăng xuất (set is_online = false)
+    // Đăng xuất (thu hồi phiên + set is_online = false)
     logout: async (req, res) => {
         try {
-            await userModel.logout(req.user.id);
+            await userModel.logout(req.user.id, req.user.sid);
             res.json({
                 success: true,
                 message: 'Đăng xuất thành công'
