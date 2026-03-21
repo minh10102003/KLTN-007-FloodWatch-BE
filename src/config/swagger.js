@@ -1,5 +1,26 @@
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
+require('dotenv').config();
+
+/** Danh sách server cho Try it out — không thêm domain giả (sẽ Failed to fetch nếu DNS chưa trỏ). */
+const swaggerServers = [
+    {
+        url: '/',
+        description:
+            'Cùng host (Railway): mở Swagger trên chính URL backend → Execute gọi đúng server (nên chọn mục này)'
+    },
+    {
+        url: 'http://localhost:3000',
+        description: 'Chỉ khi chạy `npm start` trên máy và vào http://localhost:3000/api-docs'
+    }
+];
+const swaggerPublic = process.env.SWAGGER_PUBLIC_SERVER_URL;
+if (swaggerPublic && String(swaggerPublic).trim()) {
+    swaggerServers.push({
+        url: String(swaggerPublic).replace(/\/$/, ''),
+        description: 'Domain công khai của bạn (đặt SWAGGER_PUBLIC_SERVER_URL trên Railway, vd. https://xxx.up.railway.app)'
+    });
+}
 
 const options = {
     definition: {
@@ -7,7 +28,8 @@ const options = {
         info: {
             title: 'HCM Flood Warning System API',
             version: '1.0.0',
-            description: 'API Documentation cho Hệ Thống Giám Sát Ngập Lụt TP.HCM',
+            description:
+                'API Documentation cho Hệ Thống Giám Sát Ngập Lụt TP.HCM. Trên Swagger, mục Servers phải chọn URL đúng backend (thường là / khi xem /api-docs trên Railway).',
             contact: {
                 name: 'API Support',
                 email: 'support@hcm-flood.gov.vn'
@@ -17,16 +39,7 @@ const options = {
                 url: 'https://opensource.org/licenses/ISC'
             }
         },
-        servers: [
-            {
-                url: 'http://localhost:3000',
-                description: 'Development server'
-            },
-            {
-                url: 'https://api.hcm-flood.gov.vn',
-                description: 'Production server'
-            }
-        ],
+        servers: swaggerServers,
         components: {
             securitySchemes: {
                 bearerAuth: {
