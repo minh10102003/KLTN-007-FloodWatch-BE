@@ -38,13 +38,13 @@
 #define HALT_IF_LORA_FAIL   true
 
 // ================== WIFI / MQTT ==================
-const char* WIFI_SSID     = "YOUR_WIFI_SSID";
-const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
+const char* WIFI_SSID     = "QON CaPhe";
+const char* WIFI_PASSWORD = "xincamon";
 
-const char* MQTT_HOST     = "YOUR.hivemq.cloud.host";
+const char* MQTT_HOST     = "1af3004441454f2aabda930c941a552d.s1.eu.hivemq.cloud";
 const uint16_t MQTT_PORT  = 8883;
-const char* MQTT_USER     = "your_mqtt_user";
-const char* MQTT_PASSWORD = "your_mqtt_password";
+const char* MQTT_USER     = "tram_cam_bien_1";
+const char* MQTT_PASSWORD = "Minh@2003";
 
 const char* MQTT_TOPIC    = "hcm/flood/data";
 
