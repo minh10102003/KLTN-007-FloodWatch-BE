@@ -225,6 +225,24 @@ router.post('/register', authController.register);
 router.post('/login', authController.login);
 
 /**
+ * Gửi OTP qua email (phục vụ xác thực/khôi phục tài khoản).
+ * Body: { email }
+ */
+router.post('/send-otp', authController.sendOtp);
+
+/**
+ * Gửi lại OTP qua email.
+ * Body: { email }
+ */
+router.post('/resend-otp', authController.resendOtp);
+
+/**
+ * Xác thực OTP.
+ * Body: { email, otp_code }
+ */
+router.post('/verify-otp', authController.verifyOtp);
+
+/**
  * @swagger
  * /api/auth/refresh:
  *   post:

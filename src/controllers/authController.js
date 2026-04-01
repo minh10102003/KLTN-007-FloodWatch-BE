@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const userModel = require('../models/userModel');
+const otpService = require('../services/otpService');
 
 /** Danh sách icon profile được phép (chỉ chọn từ folder public/profile-icons) */
 function getAllowedProfileIcons() {
@@ -200,6 +201,85 @@ const authController = {
             });
         } catch (err) {
             res.status(400).json({
+                success: false,
+                error: err.message
+            });
+        }
+    },
+
+    // Gửi OTP qua email
+    sendOtp: async (req, res) => {
+        try {
+            const { email } = req.body;
+            if (!email) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Thiếu thông tin: email'
+                });
+            }
+            const data = await otpService.sendOtp(email);
+            res.status(201).json({
+                success: true,
+                message: 'Đã gửi OTP qua email',
+                data
+            });
+        } catch (err) {
+            const status = /thiếu|chờ|quá số lần|hết hạn|không chính xác|chưa được đăng ký|vô hiệu hóa/i.test(err.message)
+                ? 400
+                : 500;
+            res.status(status).json({
+                success: false,
+                error: err.message
+            });
+        }
+    },
+
+    // Gửi lại OTP qua email
+    resendOtp: async (req, res) => {
+        try {
+            const { email } = req.body;
+            if (!email) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Thiếu thông tin: email'
+                });
+            }
+            const data = await otpService.resendOtp(email);
+            res.status(201).json({
+                success: true,
+                message: 'Đã gửi lại OTP qua email',
+                data
+            });
+        } catch (err) {
+            const status = /thiếu|chờ|quá số lần|hết hạn|không chính xác|chưa được đăng ký|vô hiệu hóa/i.test(err.message)
+                ? 400
+                : 500;
+            res.status(status).json({
+                success: false,
+                error: err.message
+            });
+        }
+    },
+
+    // Xác thực OTP
+    verifyOtp: async (req, res) => {
+        try {
+            const { email, otp_code } = req.body;
+            if (!email || !otp_code) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Thiếu thông tin: email, otp_code'
+                });
+            }
+            const data = await otpService.verifyOtp(email, otp_code);
+            res.json({
+                success: true,
+                message: 'Xác thực OTP thành công',
+                data
+            });
+        } catch (err) {
+            const status = /thiếu|hết hạn|không chính xác|không tồn tại/i.test(err.message) ? 400 : 500;
+            res.status(status).json({
                 success: false,
                 error: err.message
             });

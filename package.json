@@ -17,6 +17,7 @@
     "migrate:reporter-reliability": "node scripts/runMigrationReporterReliability.js",
     "migrate:last-calibrated": "node scripts/runMigrationLastCalibrated.js",
     "migrate:user-sessions": "node scripts/runMigrationUserSessions.js",
+    "migrate:email-otps": "node scripts/runMigrationEmailOtps.js",
     "migrate:s01-real": "node scripts/runMigrationS01RealHardware.js",
     "migrate:s01-height-100": "node scripts/runMigrationS01Height100.js",
     "create-admin": "node scripts/createAdminUser.js",
@@ -35,6 +36,7 @@
     "mqtt": "^5.14.1",
     "multer": "^2.1.1",
     "pg": "^8.17.2",
+    "resend": "^6.10.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1"
   }
