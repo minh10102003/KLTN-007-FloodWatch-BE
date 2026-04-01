@@ -34,7 +34,7 @@ const upload = multer({
  * POST /api/upload/report-image
  * Upload ảnh hiện trường cho báo cáo ngập.
  * Body: multipart/form-data, field name = "image"
- * Response: { success: true, url: "/uploads/xxx.jpg", filename: "xxx.jpg" }
+ * Response: { success: true, url: "/uploads/xxx.jpg", absolute_url: "https://...", filename }
  * FE dùng url (ghép với BASE_URL) gửi vào field photo_url khi POST /api/report-flood
  */
 router.post('/upload/report-image', upload.single('image'), (req, res) => {

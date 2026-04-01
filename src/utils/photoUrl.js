@@ -1,4 +1,19 @@
 /**
+ * Origin công khai để ghép URL ảnh (/uploads/...).
+ * Ưu tiên PUBLIC_BASE_URL hoặc UPLOADS_PUBLIC_ORIGIN (không slash cuối) — dùng khi CDN/proxy khác host.
+ * Nếu không set: lấy từ request (cần trust proxy đằng sau Railway/nginx để https đúng).
+ */
+function getPublicBase(req) {
+    const envBase = process.env.PUBLIC_BASE_URL || process.env.UPLOADS_PUBLIC_ORIGIN;
+    if (envBase && String(envBase).trim()) {
+        return String(envBase).trim().replace(/\/+$/, '');
+    }
+    const proto = req.protocol || 'http';
+    const host = req.get('host') || '';
+    return `${proto}://${host}`.replace(/\/+$/, '');
+}
+
+/**
  * Chuẩn hóa photo_url thành full URL để FE dùng trực tiếp <img src="..." />
  * Tránh lỗi 404 khi FE và API khác domain (browser request ảnh từ domain FE thay vì API).
  * @param {object} req - Express request (dùng req.protocol, req.get('host'))
@@ -8,7 +23,7 @@
 function toFullPhotoUrl(req, photoUrl) {
     if (!photoUrl || typeof photoUrl !== 'string') return photoUrl || null;
     if (photoUrl.startsWith('http://') || photoUrl.startsWith('https://')) return photoUrl;
-    const base = req.protocol + '://' + (req.get('host') || '');
+    const base = getPublicBase(req);
     return base + (photoUrl.startsWith('/') ? photoUrl : '/' + photoUrl);
 }
 
@@ -26,7 +41,7 @@ function toFullUrl(base, url) {
  */
 function withFullPhotoUrls(req, data) {
     if (!data) return data;
-    const base = req.protocol + '://' + (req.get('host') || '');
+    const base = getPublicBase(req);
     const mapOne = (r) => {
         if (!r) return r;
         const fullPhotoUrl = toFullUrl(base, r.photo_url) || r.photo_url;
@@ -38,4 +53,4 @@ function withFullPhotoUrls(req, data) {
     return Array.isArray(data) ? data.map(mapOne) : mapOne(data);
 }
 
-module.exports = { toFullPhotoUrl, withFullPhotoUrls };
+module.exports = { toFullPhotoUrl, withFullPhotoUrls, getPublicBase };

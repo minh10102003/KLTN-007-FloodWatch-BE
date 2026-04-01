@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs');
+const { getPublicBase } = require('../utils/photoUrl');
 
 const UPLOAD_DIR = path.join(process.cwd(), 'uploads');
 const ALLOWED_MIMES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
@@ -23,11 +24,13 @@ const uploadReportImage = (req, res) => {
             error: 'Thiếu file ảnh. Gửi với field name "image" (multipart/form-data).'
         });
     }
-    // URL tương đối để FE ghép với base URL (vd: https://api.hcmflood.vn)
     const url = '/uploads/' + req.file.filename;
+    const base = getPublicBase(req);
+    const absolute_url = base + url;
     res.json({
         success: true,
         url,
+        absolute_url,
         filename: req.file.filename
     });
 };

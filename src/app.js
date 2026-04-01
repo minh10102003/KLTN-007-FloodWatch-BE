@@ -20,6 +20,11 @@ const path = require('path');
 
 const app = express();
 
+// Railway / reverse proxy: để req.protocol và host đúng (https) khi ghép URL ảnh
+if (process.env.TRUST_PROXY !== 'false') {
+    app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS || 1) || 1);
+}
+
 // Middleware
 app.use(cors()); // Cho phép FE và BE chạy trên các cổng khác nhau
 app.use(express.json()); // Cho phép Backend đọc dữ liệu JSON từ trình duyệt gửi lên
