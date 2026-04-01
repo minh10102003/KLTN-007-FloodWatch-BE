@@ -255,7 +255,26 @@ PUT /api/auth/users/:userId/active
 
 ---
 
-### 2.4. Tạo user mới
+### 2.4. Xóa tài khoản user (vĩnh viễn)
+
+```
+DELETE /api/auth/users/:userId
+```
+
+**Header:** `Authorization: Bearer <token>` (Admin).
+
+**Body:** Không cần.
+
+**Response 200:** `success`, `message`, `data` gồm `id`, `username`, `email`, `role` của user đã xóa (để hiển thị xác nhận trên FE).
+
+**400:** Admin không được xóa chính mình; hoặc đang xóa **admin duy nhất** còn lại trong hệ thống.  
+**404:** Không tìm thấy user.
+
+**Lưu ý:** Thao tác không hoàn tác. Session/OTP liên quan user bị xóa theo CASCADE; một số tham chiếu (moderator trên báo cáo, v.v.) được gỡ hoặc xóa trước khi xóa user.
+
+---
+
+### 2.5. Tạo user mới
 
 ```
 POST /api/auth/users
@@ -283,7 +302,7 @@ POST /api/auth/users
 
 ---
 
-### 2.5. Tính lại điểm tin cậy reporter
+### 2.6. Tính lại điểm tin cậy reporter
 
 ```
 POST /api/auth/users/:userId/recompute-reliability
@@ -331,6 +350,7 @@ FE sẽ thay mock bằng gọi các endpoint trên khi có.
 | Users        | Danh sách users        | GET    | `/api/auth/users`                      | Admin          |
 | Users        | Đổi role               | PUT    | `/api/auth/users/:userId/role`         | Admin          |
 | Users        | Khóa/Mở user           | PUT    | `/api/auth/users/:userId/active`       | Admin          |
+| Users        | Xóa user               | DELETE | `/api/auth/users/:userId`              | Admin          |
 | Users        | Tạo user               | POST   | `/api/auth/users`                      | Admin          |
 | Users        | Tính lại độ tin cậy    | POST   | `/api/auth/users/:userId/recompute-reliability` | Admin |
 | Users        | Force Password Reset   | —      | Chưa có                                | Mock           |

@@ -583,6 +583,30 @@ router.put('/users/:userId/active', authenticate, requireAdmin, authController.s
 
 /**
  * @swagger
+ * /api/auth/users/{userId}:
+ *   delete:
+ *     summary: Xóa tài khoản user (chỉ Admin)
+ *     tags: [Authentication]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: Đã xóa (data chứa id, username, email, role đã xóa)
+ *       400:
+ *         description: Không xóa chính mình hoặc admin duy nhất
+ *       403:
+ *         description: Chỉ admin
+ *       404:
+ *         description: Không tìm thấy user
+ */
+router.delete('/users/:userId', authenticate, requireAdmin, authController.deleteUser);
+
+/**
+ * @swagger
  * /api/auth/users/{userId}/recompute-reliability:
  *   post:
  *     summary: Tính lại điểm tin cậy reporter từ lịch sử (Cách A). Chỉ Admin.

@@ -40,6 +40,32 @@ class UserRepository extends BaseRepository {
         await this.query(`DELETE FROM users WHERE id = $1`, [userId]);
     }
 
+    /**
+     * Xóa user (admin): gỡ FK tới users trước khi DELETE (moderated_by, acknowledged_by, evaluator, created_by).
+     * user_sessions, email_otps, emergency_subscriptions: CASCADE từ DB.
+     */
+    async deleteUserWithCleanup(userId) {
+        const client = await this.pool.connect();
+        try {
+            await client.query('BEGIN');
+            await client.query('UPDATE crowd_reports SET moderated_by = NULL WHERE moderated_by = $1', [userId]);
+            await client.query('UPDATE alerts SET acknowledged_by = NULL WHERE acknowledged_by = $1', [userId]);
+            await client.query('DELETE FROM report_evaluations WHERE evaluator_id = $1', [userId]);
+            await client.query('UPDATE ota_updates SET created_by = NULL WHERE created_by = $1', [userId]);
+            const result = await client.query(
+                'DELETE FROM users WHERE id = $1 RETURNING id, username, email, role',
+                [userId]
+            );
+            await client.query('COMMIT');
+            return result.rows[0] || null;
+        } catch (e) {
+            await client.query('ROLLBACK');
+            throw e;
+        } finally {
+            client.release();
+        }
+    }
+
     async setEmailVerifiedAt(userId, at = new Date()) {
         const query = `
             UPDATE users

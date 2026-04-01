@@ -399,6 +399,42 @@ const authController = {
     },
 
     /**
+     * Xóa tài khoản user (chỉ admin)
+     */
+    deleteUser: async (req, res) => {
+        try {
+            const userId = parseInt(req.params.userId, 10);
+            if (isNaN(userId)) {
+                return res.status(400).json({ success: false, error: 'userId không hợp lệ' });
+            }
+            const deleted = await userModel.deleteUserByAdmin(req.user.id, userId);
+            const auditLogRepository = require('../repositories/auditLogRepository');
+            await auditLogRepository.log(req.user.id, 'user_deleted', 'user', String(userId), `username=${deleted.username}`);
+            res.json({
+                success: true,
+                message: 'Đã xóa tài khoản',
+                data: deleted
+            });
+        } catch (err) {
+            const msg = err.message || '';
+            if (msg.includes('Không tìm thấy')) {
+                return res.status(404).json({ success: false, error: msg });
+            }
+            if (
+                msg.includes('Không thể xóa') ||
+                msg.includes('chính mình') ||
+                msg.includes('admin duy nhất')
+            ) {
+                return res.status(400).json({ success: false, error: msg });
+            }
+            res.status(500).json({
+                success: false,
+                error: msg || 'Lỗi khi xóa tài khoản'
+            });
+        }
+    },
+
+    /**
      * Bật/tắt tài khoản user (chỉ admin)
      */
     setActiveStatus: async (req, res) => {

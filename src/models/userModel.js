@@ -250,6 +250,30 @@ const userModel = {
     },
 
     /**
+     * Xóa tài khoản (chỉ admin). Không cho xóa chính mình hoặc admin duy nhất.
+     */
+    async deleteUserByAdmin(requestingAdminId, targetUserId) {
+        if (Number(targetUserId) === Number(requestingAdminId)) {
+            throw new Error('Không thể xóa tài khoản của chính mình');
+        }
+        const target = await userRepository.findById(targetUserId);
+        if (!target) {
+            throw new Error('Không tìm thấy user');
+        }
+        if (target.role === 'admin') {
+            const otherAdminCount = await userRepository.countAdmins(targetUserId);
+            if (otherAdminCount < 1) {
+                throw new Error('Không thể xóa admin duy nhất trong hệ thống');
+            }
+        }
+        const deleted = await userRepository.deleteUserWithCleanup(targetUserId);
+        if (!deleted) {
+            throw new Error('Không tìm thấy user');
+        }
+        return deleted;
+    },
+
+    /**
      * Đếm số admin (để validate không tự hạ role nếu chỉ còn 1 admin)
      * @param {number} [excludeUserId] - User ID loại trừ
      */
