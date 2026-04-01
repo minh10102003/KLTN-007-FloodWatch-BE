@@ -8,6 +8,9 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
  * /api/auth/register:
  *   post:
  *     summary: Đăng ký user mới
+ *     description: |
+ *       Tạo tài khoản với email chưa xác minh, gửi OTP qua email (mục đích đăng ký).
+ *       **Không** trả JWT. Sau khi gọi `POST /api/auth/verify-otp` thành công, user đăng nhập bằng `POST /api/auth/login`.
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
@@ -50,25 +53,12 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
  *                   example: true
  *                 message:
  *                   type: string
- *                   example: Đăng ký thành công
+ *                   example: Đăng ký thành công. Kiểm tra email và nhập mã OTP...
  *                 data:
  *                   type: object
  *                   properties:
  *                     user:
  *                       $ref: '#/components/schemas/User'
- *                     access_token:
- *                       type: string
- *                       description: JWT access (ngắn hạn), header Authorization Bearer
- *                     refresh_token:
- *                       type: string
- *                       description: Dùng cho POST /api/auth/refresh (lưu an toàn, không log)
- *                     session_token:
- *                       type: string
- *                       format: uuid
- *                       description: Định danh phiên đăng nhập (gửi kèm khi refresh)
- *                     token:
- *                       type: string
- *                       description: Alias của access_token (tương thích client cũ)
  *       400:
  *         description: Lỗi validation hoặc username/email đã tồn tại
  *         content:
@@ -221,6 +211,18 @@ router.post('/register', authController.register);
  *                 value:
  *                   success: false
  *                   error: Tài khoản đã bị vô hiệu hóa
+ *       403:
+ *         description: Tài khoản chưa xác minh email (OTP)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *             examples:
+ *               emailNotVerified:
+ *                 summary: Chưa xác minh OTP
+ *                 value:
+ *                   success: false
+ *                   error: Vui lòng xác minh email (mã OTP) trước khi đăng nhập
  */
 router.post('/login', authController.login);
 

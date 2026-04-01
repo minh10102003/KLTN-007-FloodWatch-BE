@@ -8,6 +8,7 @@ const OTP_TTL_MINUTES = parseInt(process.env.OTP_TTL_MINUTES || '5', 10);
 const OTP_RESEND_COOLDOWN_SECONDS = parseInt(process.env.OTP_RESEND_COOLDOWN_SECONDS || '60', 10);
 const OTP_MAX_PER_HOUR = parseInt(process.env.OTP_MAX_PER_HOUR || '5', 10);
 const OTP_PURPOSE_AUTH = 'auth';
+const OTP_PURPOSE_REGISTRATION = 'registration';
 
 function normalizeEmail(email) {
     return String(email || '').trim().toLowerCase();
@@ -39,28 +40,68 @@ function ensureResendConfigured() {
     if (!process.env.OTP_FROM_EMAIL) {
         throw new Error('OTP_FROM_EMAIL chưa được cấu hình');
     }
+    if (!String(process.env.RESEND_OTP_TEMPLATE_ID || '').trim()) {
+        throw new Error('RESEND_OTP_TEMPLATE_ID chưa được cấu hình');
+    }
 }
 
-async function sendOtpEmail(email, code) {
+/** Lấy địa chỉ email thô từ OTP_FROM_EMAIL (hỗ trợ dạng "Tên <a@b.com>"). */
+function parseFromEmailAddress() {
+    const raw = String(process.env.OTP_FROM_EMAIL || '');
+    const m = raw.match(/<([^>]+)>/);
+    return (m ? m[1] : raw).trim();
+}
+
+/**
+ * Gửi OTP qua template Resend đã Publish. HTML mẫu: templates/resend-otp.html
+ */
+async function sendOtpEmail(email, code, purpose = OTP_PURPOSE_AUTH, user = {}) {
     ensureResendConfigured();
     const resend = new Resend(process.env.RESEND_API_KEY);
     const expiresText = `${OTP_TTL_MINUTES} phút`;
-    const subject = 'Mã OTP xác thực tài khoản';
-    const html = `
-        <div style="font-family: Arial, sans-serif; line-height:1.6;">
-            <h2>FloodWatch - Xác thực OTP</h2>
-            <p>Mã OTP của bạn là:</p>
-            <p style="font-size: 28px; letter-spacing: 4px; font-weight: 700;">${code}</p>
-            <p>Mã có hiệu lực trong <b>${expiresText}</b>.</p>
-            <p>Nếu bạn không thực hiện thao tác này, vui lòng bỏ qua email.</p>
-        </div>
-    `;
+    const isRegistration = purpose === OTP_PURPOSE_REGISTRATION;
+    const subject = isRegistration ? 'Mã OTP hoàn tất đăng ký' : 'Mã OTP xác thực tài khoản';
+    const heading = isRegistration ? 'Xác minh email đăng ký' : 'Mã xác thực tài khoản';
+    const brandName = String(process.env.OTP_BRAND_NAME || 'FloodWatch').trim() || 'FloodWatch';
+    const intro = isRegistration
+        ? `Dùng mã bên dưới để hoàn tất đăng ký ${brandName}. Sau khi xác minh email, bạn có thể đăng nhập vào hệ thống.`
+        : `Bạn vừa yêu cầu mã xác thực để tiếp tục sử dụng tài khoản ${brandName}.`;
+
+    const name = user.full_name != null ? String(user.full_name).trim() : '';
+    const greeting = name ? `Xin chào ${name},` : 'Xin chào,';
+
+    const dateDisplay = new Date().toLocaleDateString('vi-VN', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+    });
+    const supportEmail =
+        String(process.env.OTP_SUPPORT_EMAIL || '').trim() || parseFromEmailAddress();
+    const helpUrl =
+        String(process.env.OTP_HELP_URL || process.env.PUBLIC_WEB_URL || '#').trim() || '#';
+
+    const templateId = String(process.env.RESEND_OTP_TEMPLATE_ID).trim();
 
     await resend.emails.send({
         from: process.env.OTP_FROM_EMAIL,
         to: [email],
         subject,
-        html
+        template: {
+            id: templateId,
+            variables: {
+                OTP_CODE: String(code),
+                EXPIRES_TEXT: expiresText,
+                HEADING: heading,
+                INTRO: intro,
+                GREETING: greeting,
+                DATE_DISPLAY: dateDisplay,
+                BRAND_NAME: brandName,
+                SUPPORT_EMAIL: supportEmail,
+                HELP_URL: helpUrl,
+                COPYRIGHT_YEAR: String(new Date().getFullYear())
+            }
+        }
     });
 }
 
@@ -85,7 +126,9 @@ const otpService = {
         if (!user) throw new Error('Email chưa được đăng ký');
         if (!user.is_active) throw new Error('Tài khoản đã bị vô hiệu hóa');
 
-        const lastOtp = await otpRepository.findLatestActiveByEmail(normalizedEmail, OTP_PURPOSE_AUTH);
+        const purpose = user.email_verified_at ? OTP_PURPOSE_AUTH : OTP_PURPOSE_REGISTRATION;
+
+        const lastOtp = await otpRepository.findLatestActiveByEmailAnyPurpose(normalizedEmail);
         if (lastOtp) {
             const diffMs = Date.now() - new Date(lastOtp.created_at).getTime();
             const cooldownMs = OTP_RESEND_COOLDOWN_SECONDS * 1000;
@@ -95,7 +138,7 @@ const otpService = {
             }
         }
 
-        const recentCount = await otpRepository.countRecentByEmail(normalizedEmail, OTP_PURPOSE_AUTH, 60);
+        const recentCount = await otpRepository.countRecentByEmailAllPurposes(normalizedEmail, 60);
         if (recentCount >= OTP_MAX_PER_HOUR) {
             throw new Error('Bạn đã gửi OTP quá số lần cho phép trong 1 giờ');
         }
@@ -109,10 +152,10 @@ const otpService = {
             email: normalizedEmail,
             code_hash: codeHash,
             expires_at: expiresAt,
-            purpose: OTP_PURPOSE_AUTH
+            purpose
         });
 
-        await sendOtpEmail(normalizedEmail, code);
+        await sendOtpEmail(normalizedEmail, code, purpose, user);
         return toPublicOtp(otp);
     },
 
@@ -126,7 +169,7 @@ const otpService = {
             throw new Error('Thiếu email hoặc otp_code');
         }
 
-        const otp = await otpRepository.findLatestActiveByEmail(normalizedEmail, OTP_PURPOSE_AUTH);
+        const otp = await otpRepository.findLatestActiveByEmailAnyPurpose(normalizedEmail);
         if (!otp) throw new Error('OTP không tồn tại hoặc đã được sử dụng');
 
         if (new Date(otp.expires_at).getTime() <= Date.now()) {
@@ -142,7 +185,9 @@ const otpService = {
         return {
             verified: true,
             email: normalizedEmail,
-            verified_at: new Date().toISOString()
+            verified_at: new Date().toISOString(),
+            user_id: otp.user_id,
+            purpose: otp.purpose
         };
     }
 };

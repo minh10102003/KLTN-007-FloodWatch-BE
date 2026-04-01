@@ -1,5 +1,6 @@
 const userRepository = require('../repositories/userRepository');
 const userSessionRepository = require('../repositories/userSessionRepository');
+const otpService = require('../services/otpService');
 const bcrypt = require('bcrypt');
 const {
     getRefreshExpiresMs,
@@ -37,7 +38,13 @@ const userModel = {
      * Đăng ký user mới
      */
     async register(userData) {
-        const { username, email, password, full_name, phone } = userData;
+        const { username, password, full_name, phone } = userData;
+        const email = String(userData.email || '')
+            .trim()
+            .toLowerCase();
+        if (!email) {
+            throw new Error('Thiếu email');
+        }
 
         // Kiểm tra username đã tồn tại
         const existingUser = await userRepository.findByUsername(username);
@@ -54,18 +61,24 @@ const userModel = {
         // Hash password
         const password_hash = await bcrypt.hash(password, 10);
 
-        // Tạo user
         const user = await userRepository.createUser({
             username,
             email,
             password_hash,
             full_name,
             phone,
-            role: 'user'
+            role: 'user',
+            email_verified_at: null
         });
 
-        const tokens = await this._issueTokensForUser(user);
-        return { user, ...tokens };
+        try {
+            await otpService.sendOtp(email);
+        } catch (e) {
+            await userRepository.deleteUserById(user.id);
+            throw e;
+        }
+
+        return { user };
     },
 
     /**
@@ -73,7 +86,11 @@ const userModel = {
      * Không trả token – người được tạo sẽ đăng nhập sau.
      */
     async createUserByAdmin(userData) {
-        const { username, email, password, full_name, phone, role } = userData;
+        const { username, password, full_name, phone, role } = userData;
+        const email = String(userData.email || '')
+            .trim()
+            .toLowerCase();
+        if (!email) throw new Error('Thiếu email');
         const validRoles = ['user', 'moderator', 'admin'];
         if (!role || !validRoles.includes(role)) {
             throw new Error('Role không hợp lệ. Chọn: user, moderator, admin');
@@ -89,7 +106,8 @@ const userModel = {
             password_hash,
             full_name,
             phone,
-            role
+            role,
+            email_verified_at: new Date()
         });
         return user;
     },
@@ -111,6 +129,10 @@ const userModel = {
         const isValid = await bcrypt.compare(password, user.password_hash);
         if (!isValid) {
             throw new Error('Username hoặc password không đúng');
+        }
+
+        if (!user.email_verified_at) {
+            throw new Error('Vui lòng xác minh email (mã OTP) trước khi đăng nhập');
         }
 
         // Cập nhật last_login
@@ -145,6 +167,9 @@ const userModel = {
         const user = await userRepository.findById(session.user_id);
         if (!user || !user.is_active) {
             throw new Error('Tài khoản không hợp lệ');
+        }
+        if (!user.email_verified_at) {
+            throw new Error('Tài khoản chưa xác minh email');
         }
         const newRefresh = generateRefreshToken();
         const newHash = hashRefreshToken(newRefresh);
@@ -291,6 +316,24 @@ const userModel = {
     async recomputeReporterReliabilityFromHistory(userId) {
         const score = await userRepository.computeReporterReliabilityFromHistory(String(userId));
         return await userRepository.setReporterReliability(userId, score);
+    },
+
+    /**
+     * Xác thực OTP email. Nếu purpose là đăng ký, ghi nhận email đã xác minh (sau đó user đăng nhập bình thường).
+     */
+    async verifyEmailWithOtp(email, code) {
+        const out = await otpService.verifyOtp(email, code);
+        const registrationCompleted = out.purpose === 'registration';
+        if (registrationCompleted) {
+            await userRepository.setEmailVerifiedAt(out.user_id);
+        }
+        return {
+            verified: true,
+            email: out.email,
+            verified_at: out.verified_at,
+            purpose: out.purpose,
+            registration_completed: registrationCompleted
+        };
     }
 };
 

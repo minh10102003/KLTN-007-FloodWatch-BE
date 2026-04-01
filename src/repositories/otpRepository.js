@@ -23,6 +23,19 @@ class OtpRepository extends BaseRepository {
         return await this.queryOne(query, [email.toLowerCase(), purpose]);
     }
 
+    /** OTP mới nhất chưa dùng (mọi purpose) — dùng khi verify */
+    async findLatestActiveByEmailAnyPurpose(email) {
+        const query = `
+            SELECT id, user_id, email, code_hash, purpose, expires_at, consumed_at, created_at
+            FROM email_otps
+            WHERE email = $1
+              AND consumed_at IS NULL
+            ORDER BY created_at DESC
+            LIMIT 1
+        `;
+        return await this.queryOne(query, [email.toLowerCase()]);
+    }
+
     async countRecentByEmail(email, purpose = 'auth', minutes = 60) {
         const query = `
             SELECT COUNT(*)::int AS count
@@ -32,6 +45,18 @@ class OtpRepository extends BaseRepository {
               AND created_at >= NOW() - ($3::text || ' minutes')::interval
         `;
         const row = await this.queryOne(query, [email.toLowerCase(), purpose, String(minutes)]);
+        return row?.count || 0;
+    }
+
+    /** Giới hạn gửi OTP theo email (mọi purpose) */
+    async countRecentByEmailAllPurposes(email, minutes = 60) {
+        const query = `
+            SELECT COUNT(*)::int AS count
+            FROM email_otps
+            WHERE email = $1
+              AND created_at >= NOW() - ($2::text || ' minutes')::interval
+        `;
+        const row = await this.queryOne(query, [email.toLowerCase(), String(minutes)]);
         return row?.count || 0;
     }
 

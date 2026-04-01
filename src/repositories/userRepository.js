@@ -16,15 +16,38 @@ class UserRepository extends BaseRepository {
             password_hash,
             full_name,
             phone,
-            role = 'user'
+            role = 'user',
+            email_verified_at = null
         } = userData;
 
         const query = `
-            INSERT INTO users (username, email, password_hash, full_name, phone, role)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            RETURNING id, username, email, full_name, phone, role, is_active, created_at
+            INSERT INTO users (username, email, password_hash, full_name, phone, role, email_verified_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING id, username, email, full_name, phone, role, is_active, created_at, email_verified_at
         `;
-        return await this.queryOne(query, [username, email, password_hash, full_name, phone, role]);
+        return await this.queryOne(query, [
+            username,
+            email,
+            password_hash,
+            full_name,
+            phone,
+            role,
+            email_verified_at
+        ]);
+    }
+
+    async deleteUserById(userId) {
+        await this.query(`DELETE FROM users WHERE id = $1`, [userId]);
+    }
+
+    async setEmailVerifiedAt(userId, at = new Date()) {
+        const query = `
+            UPDATE users
+            SET email_verified_at = $1, updated_at = CURRENT_TIMESTAMP
+            WHERE id = $2
+            RETURNING id, username, email, email_verified_at
+        `;
+        return await this.queryOne(query, [at, userId]);
     }
 
     /**
@@ -33,7 +56,7 @@ class UserRepository extends BaseRepository {
      */
     async findByUsername(username) {
         const query = `
-            SELECT id, username, email, password_hash, full_name, phone, role, is_active, last_login, created_at
+            SELECT id, username, email, password_hash, full_name, phone, role, is_active, last_login, created_at, email_verified_at
             FROM users
             WHERE username = $1
         `;
@@ -46,7 +69,7 @@ class UserRepository extends BaseRepository {
      */
     async findByEmail(email) {
         const query = `
-            SELECT id, username, email, password_hash, full_name, phone, role, is_active, last_login, created_at
+            SELECT id, username, email, password_hash, full_name, phone, role, is_active, last_login, created_at, email_verified_at
             FROM users
             WHERE email = $1
         `;
@@ -59,7 +82,7 @@ class UserRepository extends BaseRepository {
      */
     async findById(userId) {
         const query = `
-            SELECT id, username, email, full_name, phone, role, is_active, last_login, created_at, avatar
+            SELECT id, username, email, full_name, phone, role, is_active, last_login, created_at, avatar, email_verified_at
             FROM users
             WHERE id = $1
         `;

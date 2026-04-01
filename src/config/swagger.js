@@ -91,6 +91,12 @@ const options = {
                         role: { type: 'string', enum: ['user', 'admin', 'moderator'], example: 'user' },
                         is_active: { type: 'boolean', example: true },
                         last_login: { type: 'string', format: 'date-time' },
+                        email_verified_at: {
+                            type: 'string',
+                            format: 'date-time',
+                            nullable: true,
+                            description: 'Đã xác minh email (OTP). null = chưa xác minh, không đăng nhập được.'
+                        },
                         created_at: { type: 'string', format: 'date-time' }
                     }
                 },

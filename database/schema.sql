@@ -48,6 +48,7 @@ CREATE TABLE users (
     is_online BOOLEAN DEFAULT FALSE,
     avatar VARCHAR(100),
     last_login TIMESTAMP,
+    email_verified_at TIMESTAMPTZ,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT chk_user_role CHECK (role IN ('user', 'moderator', 'admin'))
@@ -56,6 +57,7 @@ CREATE TABLE users (
 COMMENT ON COLUMN users.is_online IS 'Trạng thái online: true khi đăng nhập, false khi đăng xuất';
 COMMENT ON COLUMN users.reporter_reliability IS 'Điểm tin cậy khi là người báo cáo (0-100). Cách C: cập nhật theo sự kiện + có thể tính lại từ lịch sử.';
 COMMENT ON COLUMN users.avatar IS 'Tên file ảnh đại diện (profile icon), VD: cat.png. Chỉ được chọn từ danh sách icon có sẵn.';
+COMMENT ON COLUMN users.email_verified_at IS 'Thời điểm xác minh email (OTP). NULL = chưa xác minh, không cho đăng nhập.';
 COMMENT ON CONSTRAINT chk_user_role ON users IS 'Chỉ cho phép role: user, moderator, admin';
 
 -- -----------------------------------------------------------------------------

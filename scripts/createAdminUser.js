@@ -35,6 +35,7 @@ async function createAdminUser() {
                     full_name = $3, 
                     role = $4,
                     is_active = true,
+                    email_verified_at = COALESCE(email_verified_at, CURRENT_TIMESTAMP),
                     updated_at = CURRENT_TIMESTAMP
                 WHERE username = $5
                 RETURNING id, username, email, role
@@ -54,8 +55,8 @@ async function createAdminUser() {
         } else {
             // Tạo admin user mới
             const insertQuery = `
-                INSERT INTO users (username, email, password_hash, full_name, role, is_active)
-                VALUES ($1, $2, $3, $4, $5, true)
+                INSERT INTO users (username, email, password_hash, full_name, role, is_active, email_verified_at)
+                VALUES ($1, $2, $3, $4, $5, true, CURRENT_TIMESTAMP)
                 RETURNING id, username, email, role
             `;
             const result = await pool.query(insertQuery, [

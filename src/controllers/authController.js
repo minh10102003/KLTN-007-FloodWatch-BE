@@ -33,13 +33,10 @@ const authController = {
 
             res.status(201).json({
                 success: true,
-                message: 'Đăng ký thành công',
+                message:
+                    'Đăng ký thành công. Kiểm tra email và nhập mã OTP để xác minh, sau đó mới đăng nhập được.',
                 data: {
-                    user: result.user,
-                    access_token: result.access_token,
-                    refresh_token: result.refresh_token,
-                    session_token: result.session_token,
-                    token: result.token
+                    user: result.user
                 }
             });
         } catch (err) {
@@ -76,7 +73,8 @@ const authController = {
                 }
             });
         } catch (err) {
-            res.status(401).json({
+            const needVerify = /xác minh email/i.test(err.message);
+            res.status(needVerify ? 403 : 401).json({
                 success: false,
                 error: err.message
             });
@@ -271,10 +269,12 @@ const authController = {
                     error: 'Thiếu thông tin: email, otp_code'
                 });
             }
-            const data = await otpService.verifyOtp(email, otp_code);
+            const data = await userModel.verifyEmailWithOtp(email, otp_code);
             res.json({
                 success: true,
-                message: 'Xác thực OTP thành công',
+                message: data.registration_completed
+                    ? 'Đã xác minh email. Bạn có thể đăng nhập.'
+                    : 'Xác thực OTP thành công',
                 data
             });
         } catch (err) {

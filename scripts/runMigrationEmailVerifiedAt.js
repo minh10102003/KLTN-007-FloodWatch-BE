@@ -1,15 +1,6 @@
 /**
- * Tạo bảng email_otps.
- * Chạy: node scripts/runMigrationEmailOtps.js
- *
- * Kết nối DB (ưu tiên):
- * 1) DATABASE_URL — copy nguyên từ Railway Postgres (Variables → DATABASE_URL).
- *    Nếu mật khẩu có @ # : / … phải URL-encode (vd @ → %40) hoặc dùng cách (2).
- * 2) DB_USER, DB_HOST, DB_NAME, DB_PASS, DB_PORT trong .env (không cần DATABASE_URL).
- *
- * PowerShell (chỉ session hiện tại, tránh .env lỗi đè):
- *   $env:DATABASE_URL="postgresql://..."
- *   npm run migrate:email-otps
+ * Thêm cột users.email_verified_at + backfill tài khoản cũ.
+ * Chạy: node scripts/runMigrationEmailVerifiedAt.js
  */
 const fs = require('fs');
 const path = require('path');
@@ -18,26 +9,21 @@ require('dotenv').config();
 
 function isValidPostgresUrl(str) {
     if (!str || typeof str !== 'string') return false;
-    const s = str.trim();
-    if (!s) return false;
     try {
-        const normalized = s.replace(/^postgresql:/i, 'postgres:');
-        new URL(normalized);
+        new URL(str.trim().replace(/^postgresql:/i, 'postgres:'));
         return true;
     } catch {
         return false;
     }
 }
 
-/** TCP proxy public Railway đôi khi không dùng SSL → cần ?sslmode=disable hoặc DB_SSL=false */
 function shouldUseSsl(connectionString) {
     if (process.env.DB_SSL === 'false') return false;
     if ((process.env.PGSSLMODE || '').toLowerCase() === 'disable') return false;
     if (connectionString) {
         try {
             const u = new URL(connectionString.replace(/^postgresql:/i, 'postgres:'));
-            const m = (u.searchParams.get('sslmode') || '').toLowerCase();
-            if (m === 'disable') return false;
+            if ((u.searchParams.get('sslmode') || '').toLowerCase() === 'disable') return false;
         } catch {
             /* ignore */
         }
@@ -54,12 +40,6 @@ function buildPool() {
             ...(ssl ? { ssl: { rejectUnauthorized: false } } : {})
         });
     }
-    if (rawUrl) {
-        console.warn(
-            '⚠️ DATABASE_URL trong .env không phải URL hợp lệ — bỏ qua, dùng DB_USER/DB_HOST/...\n' +
-                '   (Nếu muốn dùng URL: copy nguyên từ Railway hoặc URL-encode ký tự đặc biệt trong password.)'
-        );
-    }
     return new Pool({
         user: process.env.DB_USER,
         host: process.env.DB_HOST,
@@ -74,10 +54,10 @@ const pool = buildPool();
 async function run() {
     const client = await pool.connect();
     try {
-        const sqlPath = path.join(__dirname, '..', 'database', 'email_otps.sql');
+        const sqlPath = path.join(__dirname, '..', 'database', 'add_email_verified_at_to_users.sql');
         const sql = fs.readFileSync(sqlPath, 'utf8');
         await client.query(sql);
-        console.log('✅ Đã tạo bảng email_otps.');
+        console.log('✅ Đã thêm/backfill email_verified_at cho users.');
     } catch (err) {
         console.error('❌ Lỗi:', err.message);
         process.exit(1);
