@@ -319,6 +319,23 @@ class FloodRepository extends BaseRepository {
 
         return await this.queryAll(query, params);
     }
+
+    /**
+     * Chuỗi flood_logs trong cửa sổ thời gian (ASC) — phục vụ dự báo xu hướng.
+     * @param {string} sensorId
+     * @param {number} minutesBack - tối đa 24h (giới hạn trong controller)
+     */
+    async getFloodLogsForForecast(sensorId, minutesBack) {
+        const mins = Math.max(1, Math.min(parseInt(minutesBack, 10) || 90, 24 * 60));
+        const query = `
+            SELECT water_level, created_at
+            FROM flood_logs
+            WHERE sensor_id = $1
+              AND created_at >= NOW() - ($2::int * INTERVAL '1 minute')
+            ORDER BY created_at ASC
+        `;
+        return await this.queryAll(query, [sensorId, mins]);
+    }
 }
 
 module.exports = new FloodRepository();

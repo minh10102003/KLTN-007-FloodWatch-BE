@@ -202,6 +202,7 @@ class CrowdReportRepository extends BaseRepository {
                 photo_url,
                 content,
                 photo_urls,
+                moderation_status,
                 ST_X(location::geometry) as lng, 
                 ST_Y(location::geometry) as lat, 
                 created_at 

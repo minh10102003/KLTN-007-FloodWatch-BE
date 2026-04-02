@@ -1,6 +1,7 @@
 const crowdReportRepository = require('../repositories/crowdReportRepository');
 const userModel = require('../models/userModel');
 const { withFullPhotoUrls } = require('../utils/photoUrl');
+const { withReportConfidence } = require('../utils/reportConfidence');
 
 const reportModerationController = {
     // Lấy tất cả báo cáo (kể cả cũ) - Admin/Moderator, không giới hạn theo thời gian
@@ -13,7 +14,7 @@ const reportModerationController = {
             );
             res.json({
                 success: true,
-                data: withFullPhotoUrls(req, data)
+                data: withFullPhotoUrls(req, withReportConfidence(data))
             });
         } catch (err) {
             res.status(500).json({ success: false, error: err.message });
@@ -27,7 +28,7 @@ const reportModerationController = {
             const data = await crowdReportRepository.getPendingModerationReports(parseInt(limit) || 50);
             res.json({
                 success: true,
-                data: withFullPhotoUrls(req, data)
+                data: withFullPhotoUrls(req, withReportConfidence(data))
             });
         } catch (err) {
             res.status(500).json({ success: false, error: err.message });
@@ -100,7 +101,7 @@ const reportModerationController = {
             res.json({
                 success: true,
                 message: `Đã ${action === 'approve' ? 'duyệt' : 'từ chối'} báo cáo`,
-                data: withFullPhotoUrls(req, data)
+                data: withFullPhotoUrls(req, withReportConfidence(data))
             });
         } catch (err) {
             console.error('❌ [Moderation] Error:', err);
