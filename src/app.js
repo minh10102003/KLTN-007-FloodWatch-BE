@@ -2,6 +2,9 @@ const express = require('express');
 const cors = require('cors');
 const swaggerSetup = require('./config/swagger');
 const floodRoutes = require('./routes/floodRoutes');
+const fusionRoutes = require('./routes/fusionRoutes');
+const forecastRoutes = require('./routes/forecastRoutes');
+const weatherRoutes = require('./routes/weatherRoutes');
 const crowdReportRoutes = require('./routes/crowdReportRoutes');
 const sensorRoutes = require('./routes/sensorRoutes');
 const authRoutes = require('./routes/authRoutes');
@@ -39,6 +42,9 @@ app.use('/api', accessLogMiddleware);
 
 // Routes (đặt route cố định /api/audit-logs trước các route có tham số /:id để tránh bị sensorRoutes bắt nhầm)
 app.use('/api', floodRoutes);
+app.use('/api', fusionRoutes);
+app.use('/api', forecastRoutes);
+app.use('/api', weatherRoutes);
 app.use('/api', crowdReportRoutes);
 app.use('/api', auditLogRoutes);
 app.use('/api/sensors', sensorRoutes);

@@ -163,7 +163,40 @@ const options = {
                         moderation_status: { type: 'string', enum: ['pending', 'approved', 'rejected'] },
                         lng: { type: 'number', example: 106.721 },
                         lat: { type: 'number', example: 10.798 },
-                        created_at: { type: 'string', format: 'date-time' }
+                        created_at: { type: 'string', format: 'date-time' },
+                        confidence: {
+                            type: 'integer',
+                            minimum: 0,
+                            maximum: 100,
+                            description:
+                                'Độ tin cậy tổng hợp (A2): từ reliability_score, kiểm duyệt, validation, cảm biến, ảnh'
+                        },
+                        confidence_breakdown: {
+                            type: 'object',
+                            additionalProperties: { type: 'number' },
+                            description: 'Các thành phần cộng/trừ điểm (debug/demo)'
+                        }
+                    }
+                },
+                ShortForecast: {
+                    type: 'object',
+                    properties: {
+                        sensor_id: { type: 'string', example: 'S01' },
+                        location_name: { type: 'string', nullable: true },
+                        horizon_minutes: { type: 'integer', example: 60 },
+                        current_water_level_cm: { type: 'number', nullable: true },
+                        velocity_cm_per_hour: { type: 'number', nullable: true },
+                        predicted_water_level_cm: { type: 'number', nullable: true },
+                        warning_threshold_cm: { type: 'number' },
+                        danger_threshold_cm: { type: 'number' },
+                        may_exceed_warning_within_horizon: { type: 'boolean' },
+                        may_exceed_danger_within_horizon: { type: 'boolean' },
+                        estimated_minutes_to_warning: { type: 'integer', nullable: true },
+                        estimated_minutes_to_danger: { type: 'integer', nullable: true },
+                        confidence: { type: 'string', enum: ['none', 'low', 'medium', 'high'] },
+                        sample_count: { type: 'integer' },
+                        span_minutes: { type: 'number', nullable: true },
+                        method: { type: 'string', example: 'linear_trend' }
                     }
                 }
             }
@@ -204,6 +237,20 @@ const options = {
             {
                 name: 'Heatmap',
                 description: 'APIs lấy dữ liệu heatmap'
+            },
+            {
+                name: 'Sensor–Crowd Fusion',
+                description:
+                    'Hợp nhất mực nước cảm biến và báo cáo đám đông (trọng số động theo khoảng cách và độ lệch)'
+            },
+            {
+                name: 'Forecast',
+                description: 'Dự báo mực nước ngắn hạn theo sensor (xu hướng tuyến tính từ flood_logs)'
+            },
+            {
+                name: 'Weather',
+                description:
+                    'Thời tiết TP.HCM qua Open-Meteo (https://open-meteo.com/) — không cần API key'
             },
             {
                 name: 'OTA Updates',
