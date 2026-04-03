@@ -207,6 +207,13 @@ const userModel = {
     },
 
     /**
+     * Lưu tọa độ GPS gần nhất (FE: Geolocation API sau khi user đồng ý).
+     */
+    async updateMyLocation(userId, payload) {
+        return await userRepository.updateLastKnownLocation(userId, payload);
+    },
+
+    /**
      * Đổi mật khẩu
      */
     async changePassword(userId, oldPassword, newPassword) {

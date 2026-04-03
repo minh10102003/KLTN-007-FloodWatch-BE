@@ -21,6 +21,7 @@
     "migrate:email-verified-at": "node scripts/runMigrationEmailVerifiedAt.js",
     "migrate:s01-real": "node scripts/runMigrationS01RealHardware.js",
     "migrate:s01-height-100": "node scripts/runMigrationS01Height100.js",
+    "migrate:user-last-location": "node scripts/runMigrationUserLastLocation.js",
     "create-admin": "node scripts/createAdminUser.js",
     "check-moderation": "node scripts/checkModerationStatus.js"
   },

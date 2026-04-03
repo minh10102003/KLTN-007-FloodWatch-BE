@@ -136,6 +136,53 @@ const authController = {
         }
     },
 
+    /**
+     * Cập nhật vị trí hiện tại (GPS). FE gọi sau navigator.geolocation.getCurrentPosition khi user đã đăng nhập.
+     * Body: { lat, lng, accuracy_m? } (WGS84).
+     */
+    updateMyLocation: async (req, res) => {
+        try {
+            const { lat, lng, accuracy_m } = req.body;
+            if (lat == null || lng == null) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Thiếu lat hoặc lng (độ WGS84, số thực)'
+                });
+            }
+            const la = Number(lat);
+            const ln = Number(lng);
+            if (!Number.isFinite(la) || !Number.isFinite(ln)) {
+                return res.status(400).json({ success: false, error: 'lat/lng phải là số' });
+            }
+            if (la < -90 || la > 90 || ln < -180 || ln > 180) {
+                return res.status(400).json({ success: false, error: 'lat ∈ [-90,90], lng ∈ [-180,180]' });
+            }
+            let acc = null;
+            if (accuracy_m != null && accuracy_m !== '') {
+                acc = Number(accuracy_m);
+                if (!Number.isFinite(acc) || acc < 0 || acc > 500_000) {
+                    return res.status(400).json({ success: false, error: 'accuracy_m không hợp lệ' });
+                }
+            }
+            const user = await userModel.updateMyLocation(req.user.id, { lat: la, lng: ln, accuracy_m: acc });
+            res.json({
+                success: true,
+                message: 'Đã cập nhật vị trí',
+                data: {
+                    last_known_lat: user.last_known_lat != null ? parseFloat(user.last_known_lat) : null,
+                    last_known_lng: user.last_known_lng != null ? parseFloat(user.last_known_lng) : null,
+                    last_location_accuracy_m:
+                        user.last_location_accuracy_m != null
+                            ? parseFloat(user.last_location_accuracy_m)
+                            : null,
+                    last_location_at: user.last_location_at
+                }
+            });
+        } catch (err) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    },
+
     // Cập nhật profile (full_name, phone, email, avatar). Avatar chỉ được chọn từ danh sách icon có sẵn.
     updateProfile: async (req, res) => {
         try {

@@ -108,11 +108,29 @@ class UserRepository extends BaseRepository {
      */
     async findById(userId) {
         const query = `
-            SELECT id, username, email, full_name, phone, role, is_active, last_login, created_at, avatar, email_verified_at
+            SELECT id, username, email, full_name, phone, role, is_active, last_login, created_at, avatar, email_verified_at,
+                   last_known_lat, last_known_lng, last_location_accuracy_m, last_location_at
             FROM users
             WHERE id = $1
         `;
         return await this.queryOne(query, [userId]);
+    }
+
+    /**
+     * Cập nhật vị trí GPS gần nhất (POST /api/auth/location).
+     */
+    async updateLastKnownLocation(userId, { lat, lng, accuracy_m = null }) {
+        const query = `
+            UPDATE users SET
+                last_known_lat = $1,
+                last_known_lng = $2,
+                last_location_accuracy_m = $3,
+                last_location_at = CURRENT_TIMESTAMP,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $4
+        `;
+        await this.query(query, [lat, lng, accuracy_m, userId]);
+        return await this.findById(userId);
     }
 
     /**
