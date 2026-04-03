@@ -91,26 +91,29 @@ Làm tuần tự để mỗi bước có thể demo được; có thể song son
 
 ## Nhóm B — Vận hành & tin cậy
 
-### B1. Health & telemetry thiết bị
+### B1. Health & telemetry thiết bị ✅
 
 - **Mục tiêu:** Theo dõi gateway, RSSI LoRa, packet loss, pin (nếu firmware đã gửi).
 - **Gợi ý kỹ thuật:** Bảng hoặc mở rộng log; API `GET /health/sensors` hoặc `/api/admin/devices/health` (RBAC).
 - **Demo:** Dashboard hoặc Swagger mô tả trạng thái “online / degraded / offline”.
+- **Đã triển khai:** `GET /api/v1/admin/devices/health` (admin JWT), phân loại theo thời gian đo cuối từ `flood_logs` / `energy_logs` (RSSI, pin nếu có), env `HEALTH_ONLINE_MAX_MINUTES`, `HEALTH_DEGRADED_MAX_MINUTES`. Swagger tag **Device Health**.
 
 ---
 
-### B2. Idempotency / outbox cho MQTT
+### B2. Idempotency / outbox cho MQTT ✅
 
 - **Mục tiêu:** Tránh trùng bản ghi khi reconnect / gửi lặp message.
 - **Gợi ý kỹ thuật:** Message id + unique constraint hoặc bảng outbox; worker xử lý idempotent.
 - **Báo cáo:** Một đoạn “đảm bảo tính nhất quán dữ liệu cảm biến”.
+- **Đã triển khai:** Cột `flood_logs.ingest_key` + unique `(sensor_id, ingest_key)`; MQTT set `ingest_key` từ `msg_id` / seq / hash; `INSERT … ON CONFLICT DO NOTHING`. Migration: `npm run migrate:flood-ingest-key`.
 
 ---
 
-### B3. Rate limit + chống abuse (endpoint báo cáo công khai)
+### B3. Rate limit + chống abuse (endpoint báo cáo công khai) ✅
 
 - **Mục tiêu:** Giới hạn spam report theo IP / user / fingerprint đơn giản.
 - **Gợi ý kỹ thuật:** `express-rate-limit` hoặc tương đương; có thể kết hợp với A2.
+- **Đã triển khai:** `express-rate-limit` theo IP (`keyGenerator` dùng `req.ip`) trên `POST /api/report-flood`; env `REPORT_FLOOD_WINDOW_MS`, `REPORT_FLOOD_MAX_PER_WINDOW`.
 
 ---
 

@@ -22,6 +22,7 @@
     "migrate:s01-real": "node scripts/runMigrationS01RealHardware.js",
     "migrate:s01-height-100": "node scripts/runMigrationS01Height100.js",
     "migrate:user-last-location": "node scripts/runMigrationUserLastLocation.js",
+    "migrate:flood-ingest-key": "node scripts/runMigrationFloodLogsIngestKey.js",
     "create-admin": "node scripts/createAdminUser.js",
     "check-moderation": "node scripts/checkModerationStatus.js"
   },
@@ -34,6 +35,7 @@
     "cors": "^2.8.6",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
+    "express-rate-limit": "^7.5.0",
     "jsonwebtoken": "^9.0.3",
     "mqtt": "^5.14.1",
     "multer": "^2.1.1",

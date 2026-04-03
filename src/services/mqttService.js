@@ -58,6 +58,27 @@ const filterWithKalman = (sensorId, rawDistance) => {
     return kalmanFilters[sensorId].filter(rawDistance);
 };
 
+/** Khóa idempotent: ưu tiên msg_id / seq từ thiết bị; không có thì hash (sensor + giây + raw cm). */
+function buildMqttIngestKey(sensorId, data, rawDistanceForDedupe) {
+    const explicit = data.msg_id ?? data.message_id ?? data.seq ?? data.dedupe_id;
+    if (explicit != null && String(explicit).trim() !== '') {
+        return crypto
+            .createHash('sha256')
+            .update(`${sensorId}:${String(explicit)}`)
+            .digest('hex')
+            .slice(0, 32);
+    }
+    let sec;
+    if (data.timestamp) {
+        const t = Date.parse(data.timestamp);
+        sec = Number.isFinite(t) ? Math.floor(t / 1000) : Math.floor(Date.now() / 1000);
+    } else {
+        sec = Math.floor(Date.now() / 1000);
+    }
+    const rv = Math.round(Number(rawDistanceForDedupe) * 1000) / 1000;
+    return crypto.createHash('sha256').update(`${sensorId}|${sec}|${rv}`).digest('hex').slice(0, 32);
+}
+
 // Hàm kiểm tra checksum (nếu có trong payload)
 const validateChecksum = (data, receivedChecksum) => {
     if (!receivedChecksum) {
@@ -203,17 +224,23 @@ const init = () => {
             // 7. Xác định trạng thái
             const status = await determineStatus(sensor_id, waterLevel);
             
-            // 8. Lưu vào flood_logs (kèm temperature, humidity từ DHT22 nếu có)
-            await floodRepository.createFloodLog({
+            // 8. Lưu vào flood_logs (idempotent theo ingest_key — trùng MQTT bỏ qua)
+            const ingest_key = buildMqttIngestKey(sensor_id, data, basicFiltered);
+            const log = await floodRepository.createFloodLog({
                 sensor_id,
                 raw_distance: filteredDistance,
                 water_level: waterLevel,
                 velocity,
                 status,
                 temperature: temperature != null ? parseFloat(temperature) : undefined,
-                humidity: humidity != null ? parseFloat(humidity) : undefined
+                humidity: humidity != null ? parseFloat(humidity) : undefined,
+                ingest_key
             });
-            
+            if (!log) {
+                console.log(`🔁 [MQTT] Dedupe skip ${sensor_id} (${ingest_key.slice(0, 8)}…)`);
+                return;
+            }
+
             // 9. Cập nhật health check cho sensor
             await updateSensorHealth(sensor_id, status);
             

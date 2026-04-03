@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const crowdReportController = require('../controllers/crowdReportController');
 const { authenticate, optionalAuthenticate } = require('../middleware/auth');
+const { reportFloodLimiter } = require('../middleware/reportRateLimit');
 
 /**
  * @swagger
@@ -188,7 +189,7 @@ router.get('/crowd-reports/all', authenticate, crowdReportController.getAllRepor
  */
 // POST /api/report-flood - Cho phép cả authenticated và anonymous users
 // Nếu có token, sẽ lưu reporter_id; nếu không, reporter_id = null (báo cáo ẩn danh)
-router.post('/report-flood', optionalAuthenticate, crowdReportController.createReport);
+router.post('/report-flood', reportFloodLimiter, optionalAuthenticate, crowdReportController.createReport);
 
 module.exports = router;
 

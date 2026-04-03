@@ -124,23 +124,31 @@ class FloodRepository extends BaseRepository {
             velocity,
             status,
             temperature,
-            humidity
+            humidity,
+            ingest_key
         } = floodData;
 
+        if (!ingest_key || String(ingest_key).trim() === '') {
+            throw new Error('createFloodLog cần ingest_key (idempotent MQTT)');
+        }
+
         const query = `
-            INSERT INTO flood_logs (sensor_id, raw_distance, water_level, velocity, status, temperature, humidity)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            INSERT INTO flood_logs (sensor_id, raw_distance, water_level, velocity, status, temperature, humidity, ingest_key)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            ON CONFLICT (sensor_id, ingest_key) DO NOTHING
             RETURNING *
         `;
-        return await this.queryOne(query, [
+        const rows = await this.query(query, [
             sensor_id,
             raw_distance,
             water_level,
             velocity,
             status,
             temperature != null ? parseFloat(temperature) : null,
-            humidity != null ? parseFloat(humidity) : null
+            humidity != null ? parseFloat(humidity) : null,
+            String(ingest_key).slice(0, 64)
         ]);
+        return rows[0] || null;
     }
 
     /**

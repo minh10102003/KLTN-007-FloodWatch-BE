@@ -270,6 +270,10 @@ const options = {
                     'Thời tiết TP.HCM qua Open-Meteo (https://open-meteo.com/) — không cần API key'
             },
             {
+                name: 'Device Health',
+                description: 'Theo dõi sức khỏe trạm cảm biến (admin): online / degraded / offline'
+            },
+            {
                 name: 'OTA Updates',
                 description: 'APIs quản lý cập nhật firmware OTA'
             },

@@ -299,6 +299,48 @@ class SensorRepository extends BaseRepository {
         `;
         return await this.queryOne(query, [sensorId]);
     }
+
+    /**
+     * Tổng quan sức khỏe thiết bị (admin): sensor + lần đo / năng lượng gần nhất.
+     */
+    async getDevicesHealthOverview() {
+        const query = `
+            SELECT
+                s.sensor_id,
+                s.location_name,
+                s.is_active,
+                s.status AS row_status,
+                s.last_data_time,
+                s.battery_level AS sensor_battery_level,
+                s.power_source,
+                s.firmware_version,
+                s.hardware_type,
+                s.model,
+                fl.water_level AS last_water_level_cm,
+                fl.status AS last_log_status,
+                fl.created_at AS last_flood_log_at,
+                el.battery_level AS energy_battery_level,
+                el.voltage AS energy_voltage,
+                el.created_at AS last_energy_at
+            FROM sensors s
+            LEFT JOIN LATERAL (
+                SELECT water_level, status, created_at
+                FROM flood_logs
+                WHERE sensor_id = s.sensor_id
+                ORDER BY created_at DESC
+                LIMIT 1
+            ) fl ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT battery_level, voltage, created_at
+                FROM energy_logs
+                WHERE sensor_id = s.sensor_id
+                ORDER BY created_at DESC
+                LIMIT 1
+            ) el ON TRUE
+            ORDER BY s.sensor_id
+        `;
+        return await this.queryAll(query);
+    }
 }
 
 module.exports = new SensorRepository();

@@ -117,11 +117,14 @@ CREATE TABLE flood_logs (
     temperature FLOAT,
     humidity FLOAT,
     status VARCHAR(20) DEFAULT 'normal',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ingest_key VARCHAR(64),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_flood_logs_sensor_ingest UNIQUE (sensor_id, ingest_key)
 );
 
 COMMENT ON COLUMN flood_logs.temperature IS 'Nhiệt độ (°C) từ DHT22, optional';
 COMMENT ON COLUMN flood_logs.humidity IS 'Độ ẩm (%) từ DHT22, optional';
+COMMENT ON COLUMN flood_logs.ingest_key IS 'Chống trùng MQTT: msg_id/seq hoặc hash (sensor, giây, raw cm)';
 
 -- -----------------------------------------------------------------------------
 -- PHẦN 7: BẢNG CROWD_REPORTS (BÁO CÁO TỪ CỘNG ĐỒNG)
