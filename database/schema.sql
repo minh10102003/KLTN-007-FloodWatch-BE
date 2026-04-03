@@ -49,6 +49,10 @@ CREATE TABLE users (
     avatar VARCHAR(100),
     last_login TIMESTAMP,
     email_verified_at TIMESTAMPTZ,
+    last_known_lat DOUBLE PRECISION,
+    last_known_lng DOUBLE PRECISION,
+    last_location_accuracy_m DOUBLE PRECISION,
+    last_location_at TIMESTAMPTZ,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT chk_user_role CHECK (role IN ('user', 'moderator', 'admin'))
@@ -59,6 +63,10 @@ COMMENT ON COLUMN users.reporter_reliability IS 'Điểm tin cậy khi là ngư�
 COMMENT ON COLUMN users.avatar IS 'Tên file ảnh đại diện (profile icon), VD: cat.png. Chỉ được chọn từ danh sách icon có sẵn.';
 COMMENT ON COLUMN users.email_verified_at IS 'Thời điểm xác minh email (OTP). NULL = chưa xác minh, không cho đăng nhập.';
 COMMENT ON CONSTRAINT chk_user_role ON users IS 'Chỉ cho phép role: user, moderator, admin';
+COMMENT ON COLUMN users.last_known_lat IS 'Vĩ độ WGS84 gần nhất (GPS), optional';
+COMMENT ON COLUMN users.last_known_lng IS 'Kinh độ WGS84 gần nhất (GPS)';
+COMMENT ON COLUMN users.last_location_accuracy_m IS 'Độ chính xác (m) từ thiết bị, nếu có';
+COMMENT ON COLUMN users.last_location_at IS 'Thời điểm cập nhật vị trí gần nhất';
 
 -- -----------------------------------------------------------------------------
 -- PHẦN 4: BẢNG SENSORS (DANH MỤC TRẠM)

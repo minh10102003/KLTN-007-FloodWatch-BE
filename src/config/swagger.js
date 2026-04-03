@@ -97,6 +97,23 @@ const options = {
                             nullable: true,
                             description: 'Đã xác minh email (OTP). null = chưa xác minh, không đăng nhập được.'
                         },
+                        last_known_lat: {
+                            type: 'number',
+                            nullable: true,
+                            description: 'Vĩ độ GPS gần nhất (WGS84), từ POST /api/auth/location'
+                        },
+                        last_known_lng: { type: 'number', nullable: true },
+                        last_location_accuracy_m: {
+                            type: 'number',
+                            nullable: true,
+                            description: 'Độ chính xác (m) từ thiết bị'
+                        },
+                        last_location_at: {
+                            type: 'string',
+                            format: 'date-time',
+                            nullable: true,
+                            description: 'Lần cập nhật vị trí gần nhất'
+                        },
                         created_at: { type: 'string', format: 'date-time' }
                     }
                 },

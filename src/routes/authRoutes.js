@@ -334,6 +334,47 @@ router.get('/profile', authenticate, authController.getProfile);
 
 /**
  * @swagger
+ * /api/auth/location:
+ *   post:
+ *     summary: Cập nhật vị trí GPS gần nhất của user đang đăng nhập
+ *     description: |
+ *       FE lấy tọa độ bằng Geolocation API (`navigator.geolocation`) sau khi user đồng ý, rồi gửi `lat`/`lng` (WGS84).
+ *       `GET /api/auth/profile` trả về các trường `last_known_lat`, `last_known_lng`, `last_location_at`, `last_location_accuracy_m`.
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [lat, lng]
+ *             properties:
+ *               lat:
+ *                 type: number
+ *                 example: 10.7769
+ *                 description: Vĩ độ (-90 … 90)
+ *               lng:
+ *                 type: number
+ *                 example: 106.7009
+ *                 description: Kinh độ (-180 … 180)
+ *               accuracy_m:
+ *                 type: number
+ *                 nullable: true
+ *                 description: Độ chính xác mét (từ `coords.accuracy`), tuỳ chọn
+ *     responses:
+ *       200:
+ *         description: Đã lưu
+ *       400:
+ *         description: Tham số không hợp lệ
+ *       401:
+ *         description: Chưa đăng nhập
+ */
+router.post('/location', authenticate, authController.updateMyLocation);
+
+/**
+ * @swagger
  * /api/auth/profile-icons:
  *   get:
  *     summary: Lấy danh sách icon ảnh đại diện có thể chọn
