@@ -329,6 +329,89 @@ class FloodRepository extends BaseRepository {
     }
 
     /**
+     * Timeline 24h cho heatmap (theo giờ), gộp sensor + crowd đã duyệt.
+     * @param {Object|null} bounds - { minLng, minLat, maxLng, maxLat }
+     */
+    async getHeatmapTimeline24h(bounds = null) {
+        let query = `
+            WITH hours AS (
+                SELECT generate_series(
+                    date_trunc('hour', NOW()) - INTERVAL '23 hour',
+                    date_trunc('hour', NOW()),
+                    INTERVAL '1 hour'
+                ) AS bucket
+            ),
+            sensor_agg AS (
+                SELECT
+                    date_trunc('hour', fl.created_at) AS bucket,
+                    AVG(fl.water_level) AS sensor_avg_water_level,
+                    COUNT(*)::int AS sensor_points
+                FROM flood_logs fl
+                INNER JOIN sensors s ON s.sensor_id = fl.sensor_id
+                WHERE fl.created_at >= NOW() - INTERVAL '24 hour'
+                  AND s.is_active = TRUE
+        `;
+        const params = [];
+        let paramIndex = 1;
+
+        if (bounds) {
+            query += `
+                  AND ST_X(s.coords::geometry) BETWEEN $${paramIndex++} AND $${paramIndex++}
+                  AND ST_Y(s.coords::geometry) BETWEEN $${paramIndex++} AND $${paramIndex++}
+            `;
+            params.push(bounds.minLng, bounds.maxLng, bounds.minLat, bounds.maxLat);
+        }
+
+        query += `
+                GROUP BY 1
+            ),
+            crowd_agg AS (
+                SELECT
+                    date_trunc('hour', cr.created_at) AS bucket,
+                    AVG(
+                        CASE cr.flood_level
+                            WHEN 'Nhẹ' THEN 10
+                            WHEN 'Trung bình' THEN 30
+                            WHEN 'Nặng' THEN 50
+                            ELSE 0
+                        END
+                    ) AS crowd_avg_water_level,
+                    COUNT(*)::int AS crowd_points
+                FROM crowd_reports cr
+                WHERE cr.created_at >= NOW() - INTERVAL '24 hour'
+                  AND cr.moderation_status = 'approved'
+        `;
+
+        if (bounds) {
+            query += `
+                  AND ST_X(cr.location::geometry) BETWEEN $${paramIndex++} AND $${paramIndex++}
+                  AND ST_Y(cr.location::geometry) BETWEEN $${paramIndex++} AND $${paramIndex++}
+            `;
+            params.push(bounds.minLng, bounds.maxLng, bounds.minLat, bounds.maxLat);
+        }
+
+        query += `
+                GROUP BY 1
+            )
+            SELECT
+                h.bucket AS bucket_time,
+                sa.sensor_avg_water_level,
+                sa.sensor_points,
+                ca.crowd_avg_water_level,
+                ca.crowd_points,
+                (
+                    COALESCE(sa.sensor_points, 0) + COALESCE(ca.crowd_points, 0)
+                )::int AS total_points
+            FROM hours h
+            LEFT JOIN sensor_agg sa ON sa.bucket = h.bucket
+            LEFT JOIN crowd_agg ca ON ca.bucket = h.bucket
+            ORDER BY h.bucket ASC
+        `;
+
+        return await this.queryAll(query, params);
+    }
+
+    /**
      * Chuỗi flood_logs trong cửa sổ thời gian (ASC) — phục vụ dự báo xu hướng.
      * @param {string} sensorId
      * @param {number} minutesBack - tối đa 24h (giới hạn trong controller)

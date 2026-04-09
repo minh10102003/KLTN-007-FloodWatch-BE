@@ -139,5 +139,30 @@ router.get('/', heatmapController.getHeatmapData);
  */
 router.get('/combined', heatmapController.getCombinedHeatmapData);
 
+/**
+ * @swagger
+ * /api/heatmap/timeline-24h:
+ *   get:
+ *     summary: Timeline 24h cho heatmap (gộp sensor + crowd theo giờ)
+ *     tags: [Heatmap]
+ *     parameters:
+ *       - in: query
+ *         name: minLng
+ *         schema: { type: number, format: float }
+ *       - in: query
+ *         name: minLat
+ *         schema: { type: number, format: float }
+ *       - in: query
+ *         name: maxLng
+ *         schema: { type: number, format: float }
+ *       - in: query
+ *         name: maxLat
+ *         schema: { type: number, format: float }
+ *     responses:
+ *       200:
+ *         description: Thành công
+ */
+router.get('/timeline-24h', heatmapController.getHeatmapTimeline24h);
+
 module.exports = router;
 

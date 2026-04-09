@@ -15,7 +15,7 @@ class EmergencySubscriptionRepository extends BaseRepository {
             lng,
             lat,
             radius = 1000,
-            notification_methods = ['email', 'sms']
+            notification_methods = ['email']
         } = subscriptionData;
 
         const query = `

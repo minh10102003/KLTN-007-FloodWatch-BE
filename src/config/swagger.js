@@ -274,6 +274,11 @@ const options = {
                 description: 'Theo dõi sức khỏe trạm cảm biến (admin): online / degraded / offline'
             },
             {
+                name: 'Research',
+                description:
+                    'API hỗ trợ luận văn: đánh giá định lượng (MAE/RMSE) và phân tích vùng thiếu cảm biến (cold-start)'
+            },
+            {
                 name: 'OTA Updates',
                 description: 'APIs quản lý cập nhật firmware OTA'
             },

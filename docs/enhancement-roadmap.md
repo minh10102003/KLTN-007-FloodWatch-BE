@@ -125,12 +125,25 @@ Làm tuần tự để mỗi bước có thể demo được; có thể song son
 - **Ý tưởng:** Email (đã có nền OTP), webhook generic, hoặc Telegram Bot / Zalo (mock hoặc tích hợp thật tùy thời gian).
 - **Gợi ý kỹ thuật:** Tận dụng `emergency_subscriptions` (hoặc bảng tương đương); template + hàng đợi (optional).
 
+**Trạng thái triển khai (backend):**
+
+- [x] Worker MQTT gọi notifier đa kênh khi `danger` hoặc `warning` + velocity cao: `src/services/mqttService.js`.
+- [x] Hỗ trợ kênh `email` (Resend), `webhook` (HTTP POST), `telegram` (Bot API) theo `notification_methods`: `src/services/emergencyNotificationService.js`.
+- [x] Bổ sung env mẫu cho webhook/telegram trong `.env.example`.
+- [ ] (Tuỳ chọn) Tách queue/retry/dead-letter để tăng độ tin cậy khi tải cao.
+
 ---
 
 ### C2. Heatmap / aggregate không gian + timeline 24h
 
 - **Mục tiêu:** API tổng hợp theo **hex grid** hoặc **phường** (PostGIS); trả chuỗi thời gian 24h cho demo bản đồ.
 - **Gợi ý kỹ thuật:** Materialized view hoặc query aggregate; cache ngắn nếu cần.
+
+**Trạng thái triển khai (backend):**
+
+- [x] Có API heatmap hiện tại: `GET /api/heatmap`, `GET /api/heatmap/combined`.
+- [x] Thêm timeline 24h theo giờ (sensor + crowd approved): `GET /api/heatmap/timeline-24h`.
+- [ ] (Tuỳ chọn) Nâng cấp aggregate theo hex grid/phường + cache materialized view.
 
 ---
 
@@ -142,12 +155,22 @@ Làm tuần tự để mỗi bước có thể demo được; có thể song son
 - **Chỉ số gợi ý:** MAE, RMSE trên dữ liệu giả lập hoặc log vài ngày.
 - **Deliverable:** 1 section trong luận văn + bảng/sơ đồ.
 
+**Trạng thái triển khai (backend):**
+
+- [x] API `GET /api/v1/research/evaluation` — trả `MAE`, `RMSE`, `bias` để so sánh baseline `crowd_only` và `fused` (tham chiếu cảm biến gần nhất).
+- [ ] (Tuỳ chọn) Xuất CSV/ảnh biểu đồ tự động cho phần phụ lục luận văn.
+
 ---
 
 ### D2. Cold start & vùng không có cảm biến
 
 - **Mục tiêu:** Narrative rõ: crowdsourcing bù “lỗ hổng” mạng lưới IoT.
 - **Việc cần làm:** Viết lại phần động lực + use case; có thể minh họa bằng query “vùng không sensor nhưng có report”.
+
+**Trạng thái triển khai (backend):**
+
+- [x] API `GET /api/v1/research/cold-start-hotspots` — tìm cụm report đã duyệt ở vùng cách xa cảm biến (theo `no_sensor_radius_m`), trả mật độ/cường độ để minh hoạ “lỗ hổng mạng IoT”.
+- [ ] (Tuỳ chọn) Nâng cấp gom cụm theo phường/hex grid chính xác hơn.
 
 ---
 

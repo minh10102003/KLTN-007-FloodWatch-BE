@@ -43,6 +43,28 @@ const heatmapController = {
         } catch (err) {
             res.status(500).json({ success: false, error: err.message });
         }
+    },
+
+    // Timeline heatmap 24h (theo giờ)
+    getHeatmapTimeline24h: async (req, res) => {
+        try {
+            const { minLng, minLat, maxLng, maxLat } = req.query;
+
+            const bounds = (minLng && minLat && maxLng && maxLat) ? {
+                minLng: parseFloat(minLng),
+                minLat: parseFloat(minLat),
+                maxLng: parseFloat(maxLng),
+                maxLat: parseFloat(maxLat)
+            } : null;
+
+            const data = await floodRepository.getHeatmapTimeline24h(bounds);
+            res.json({
+                success: true,
+                data
+            });
+        } catch (err) {
+            res.status(500).json({ success: false, error: err.message });
+        }
     }
 };
 

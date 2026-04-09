@@ -4,6 +4,7 @@ const sensorRepository = require('../repositories/sensorRepository');
 const floodRepository = require('../repositories/floodRepository');
 const alertRepository = require('../repositories/alertRepository');
 const emergencySubscriptionRepository = require('../repositories/emergencySubscriptionRepository');
+const emergencyNotificationService = require('./emergencyNotificationService');
 
 // Kalman Filter để lọc nhiễu
 class KalmanFilter {
@@ -257,9 +258,32 @@ const init = () => {
                             2000 // 2km
                         );
 
-                        // TODO: Gửi thông báo đến subscribers (email, SMS, push notification)
                         if (subscribers.length > 0) {
                             console.log(`📢 [Alert] Sending emergency alerts to ${subscribers.length} subscribers for ${sensor_id}`);
+                            const payload = {
+                                sensorId: sensor_id,
+                                locationName: sensor.location_name,
+                                status,
+                                waterLevel,
+                                velocity,
+                                lng: parseFloat(sensor.lng),
+                                lat: parseFloat(sensor.lat),
+                                triggeredAt: new Date().toISOString()
+                            };
+                            for (const subscriber of subscribers) {
+                                const results = await emergencyNotificationService.notifySubscriber(
+                                    subscriber,
+                                    payload
+                                );
+                                const successCount = results.filter((r) => r.ok).length;
+                                if (successCount < 1) {
+                                    console.warn(
+                                        `⚠️ [Alert] Notify failed for user=${subscriber.user_id}: ${results
+                                            .map((r) => `${r.channel}:${r.reason || 'unknown'}`)
+                                            .join(' | ')}`
+                                    );
+                                }
+                            }
                         }
                     }
                 } catch (err) {

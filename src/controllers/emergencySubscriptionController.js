@@ -18,7 +18,7 @@ const emergencySubscriptionController = {
                 lng: parseFloat(lng),
                 lat: parseFloat(lat),
                 radius: radius ? parseInt(radius) : 1000,
-                notification_methods: notification_methods || ['email', 'sms']
+                notification_methods: notification_methods || ['email']
             });
 
             res.status(201).json({

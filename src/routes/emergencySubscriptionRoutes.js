@@ -40,9 +40,9 @@ const { authenticate } = require('../middleware/auth');
  *                 type: array
  *                 items:
  *                   type: string
- *                   enum: [email, sms, push]
- *                 default: [email, sms]
- *                 example: [email, sms]
+ *                   enum: [email, webhook, telegram, sms, push]
+ *                 default: [email]
+ *                 example: [email, webhook]
  *     responses:
  *       201:
  *         description: Đăng ký thành công
@@ -132,8 +132,8 @@ router.get('/my-subscriptions', authenticate, emergencySubscriptionController.ge
  *                 type: array
  *                 items:
  *                   type: string
- *                   enum: [email, sms, push]
- *                 example: [email, sms]
+ *                   enum: [email, webhook, telegram, sms, push]
+ *                 example: [email, telegram]
  *                 description: Phương thức thông báo
  *               is_active:
  *                 type: boolean
