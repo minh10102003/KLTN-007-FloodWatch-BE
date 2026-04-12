@@ -23,6 +23,8 @@
     "migrate:s01-height-100": "node scripts/runMigrationS01Height100.js",
     "migrate:user-last-location": "node scripts/runMigrationUserLastLocation.js",
     "migrate:flood-ingest-key": "node scripts/runMigrationFloodLogsIngestKey.js",
+    "migrate:emergency-alert-send-log": "node scripts/runMigrationEmergencyAlertSendLog.js",
+    "migrate:telegram-per-user": "node scripts/runMigrationTelegramPerUser.js",
     "create-admin": "node scripts/createAdminUser.js",
     "check-moderation": "node scripts/checkModerationStatus.js"
   },

@@ -90,6 +90,16 @@ class UserRepository extends BaseRepository {
     }
 
     /**
+     * Tìm user theo Telegram chat_id (đã liên kết).
+     */
+    async findByTelegramChatId(chatId) {
+        if (chatId == null || String(chatId).trim() === '') return null;
+        return await this.queryOne(`SELECT id, username, email FROM users WHERE telegram_chat_id = $1`, [
+            String(chatId)
+        ]);
+    }
+
+    /**
      * Tìm user theo email
      * @param {string} email - Email
      */
@@ -109,7 +119,8 @@ class UserRepository extends BaseRepository {
     async findById(userId) {
         const query = `
             SELECT id, username, email, full_name, phone, role, is_active, last_login, created_at, avatar, email_verified_at,
-                   last_known_lat, last_known_lng, last_location_accuracy_m, last_location_at
+                   last_known_lat, last_known_lng, last_location_accuracy_m, last_location_at,
+                   telegram_chat_id, telegram_username
             FROM users
             WHERE id = $1
         `;
@@ -376,6 +387,37 @@ class UserRepository extends BaseRepository {
             ORDER BY last_login DESC NULLS LAST
         `;
         return await this.queryAll(query, []);
+    }
+
+    /**
+     * Gán Telegram chat (sau khi user /start bot với token liên kết).
+     */
+    async setTelegramChat(userId, chatId, username = null) {
+        await this.query(
+            `
+            UPDATE users
+            SET telegram_chat_id = $1,
+                telegram_username = $2,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $3
+            `,
+            [String(chatId), username != null ? String(username).slice(0, 100) : null, userId]
+        );
+        return await this.findById(userId);
+    }
+
+    async clearTelegramChat(userId) {
+        await this.query(
+            `
+            UPDATE users
+            SET telegram_chat_id = NULL,
+                telegram_username = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $1
+            `,
+            [userId]
+        );
+        return await this.findById(userId);
     }
 }
 

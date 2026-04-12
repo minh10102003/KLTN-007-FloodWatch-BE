@@ -130,7 +130,10 @@ Làm tuần tự để mỗi bước có thể demo được; có thể song son
 - [x] Worker MQTT gọi notifier đa kênh khi `danger` hoặc `warning` + velocity cao: `src/services/mqttService.js`.
 - [x] Hỗ trợ kênh `email` (Resend), `webhook` (HTTP POST), `telegram` (Bot API) theo `notification_methods`: `src/services/emergencyNotificationService.js`.
 - [x] Bổ sung env mẫu cho webhook/telegram trong `.env.example`.
-- [ ] (Tuỳ chọn) Tách queue/retry/dead-letter để tăng độ tin cậy khi tải cao.
+- [x] Dedupe theo DB (`emergency_alert_send_log`) + cooldown `EMERGENCY_ALERT_COOLDOWN_MINUTES`; migration `npm run migrate:emergency-alert-send-log`.
+- [x] Retry từng kênh (`EMERGENCY_NOTIFY_MAX_RETRIES`, `EMERGENCY_NOTIFY_RETRY_BASE_MS`).
+- [x] Admin thống kê gửi thành công: `GET /api/v1/admin/emergency-alerts/summary`.
+- [ ] (Tuỳ chọn) Queue bất đồng bộ + dead-letter (Redis/SQS) khi tải rất cao.
 
 ---
 

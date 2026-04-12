@@ -15,6 +15,8 @@ DROP TRIGGER IF EXISTS trigger_flood_log_alert ON flood_logs;
 DROP TRIGGER IF EXISTS trigger_update_reliability ON report_evaluations;
 
 DROP TABLE IF EXISTS report_evaluations;
+DROP TABLE IF EXISTS telegram_link_tokens;
+DROP TABLE IF EXISTS emergency_alert_send_log;
 DROP TABLE IF EXISTS emergency_subscriptions;
 DROP TABLE IF EXISTS ota_updates;
 DROP TABLE IF EXISTS energy_logs;
@@ -53,10 +55,15 @@ CREATE TABLE users (
     last_known_lng DOUBLE PRECISION,
     last_location_accuracy_m DOUBLE PRECISION,
     last_location_at TIMESTAMPTZ,
+    telegram_chat_id TEXT,
+    telegram_username TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT chk_user_role CHECK (role IN ('user', 'moderator', 'admin'))
 );
+
+CREATE UNIQUE INDEX uniq_users_telegram_chat_id ON users (telegram_chat_id)
+    WHERE telegram_chat_id IS NOT NULL AND telegram_chat_id <> '';
 
 COMMENT ON COLUMN users.is_online IS 'Trạng thái online: true khi đăng nhập, false khi đăng xuất';
 COMMENT ON COLUMN users.reporter_reliability IS 'Điểm tin cậy khi là người báo cáo (0-100). Cách C: cập nhật theo sự kiện + có thể tính lại từ lịch sử.';
@@ -67,6 +74,19 @@ COMMENT ON COLUMN users.last_known_lat IS 'Vĩ độ WGS84 gần nhất (GPS), o
 COMMENT ON COLUMN users.last_known_lng IS 'Kinh độ WGS84 gần nhất (GPS)';
 COMMENT ON COLUMN users.last_location_accuracy_m IS 'Độ chính xác (m) từ thiết bị, nếu có';
 COMMENT ON COLUMN users.last_location_at IS 'Thời điểm cập nhật vị trí gần nhất';
+COMMENT ON COLUMN users.telegram_chat_id IS 'Telegram chat_id (private) sau liên kết bot; dùng gửi cảnh báo';
+COMMENT ON COLUMN users.telegram_username IS 'Username Telegram (@...) nếu có';
+
+CREATE TABLE telegram_link_tokens (
+    token VARCHAR(64) PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at TIMESTAMPTZ NOT NULL,
+    consumed_at TIMESTAMPTZ NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_telegram_link_tokens_user ON telegram_link_tokens(user_id);
+CREATE INDEX idx_telegram_link_tokens_expires ON telegram_link_tokens(expires_at);
 
 -- -----------------------------------------------------------------------------
 -- PHẦN 4: BẢNG SENSORS (DANH MỤC TRẠM)
@@ -196,6 +216,21 @@ CREATE TABLE emergency_subscriptions (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Log gửi cảnh báo khẩn thành công (dedupe theo cửa sổ phút)
+CREATE TABLE emergency_alert_send_log (
+    id SERIAL PRIMARY KEY,
+    sensor_id VARCHAR(64) NOT NULL,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    alert_kind VARCHAR(32) NOT NULL,
+    channels_summary TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_emergency_alert_send_lookup
+    ON emergency_alert_send_log (sensor_id, user_id, alert_kind, created_at DESC);
+
+COMMENT ON TABLE emergency_alert_send_log IS 'Ghi nhận lần gửi cảnh báo khẩn thành công để chống spam theo cửa sổ (cooldown).';
 
 -- -----------------------------------------------------------------------------
 -- PHẦN 11: BẢNG OTA_UPDATES (QUẢN LÝ CẬP NHẬT FIRMWARE)

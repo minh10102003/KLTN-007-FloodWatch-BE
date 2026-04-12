@@ -375,6 +375,50 @@ router.post('/location', authenticate, authController.updateMyLocation);
 
 /**
  * @swagger
+ * /api/auth/telegram/link:
+ *   post:
+ *     summary: Tạo deep link liên kết Telegram (chat riêng từng user)
+ *     tags: [Authentication]
+ *     security: [{ bearerAuth: [] }]
+ *     description: |
+ *       Trả `deep_link` (mở bot với `/start <token>`). Sau khi user bấm và bot gọi webhook backend,
+ *       `users.telegram_chat_id` được gán → cảnh báo kênh `telegram` gửi vào chat đó (fallback `TELEGRAM_CHAT_ID` nếu chưa liên kết).
+ *     responses:
+ *       200:
+ *         description: deep_link + expires_in_minutes
+ *       400:
+ *         description: Thiếu cấu hình TELEGRAM_BOT_USERNAME / TELEGRAM_BOT_TOKEN
+ */
+router.post('/telegram/link', authenticate, authController.createTelegramLink);
+
+/**
+ * @swagger
+ * /api/auth/telegram/status:
+ *   get:
+ *     summary: Trạng thái liên kết Telegram
+ *     tags: [Authentication]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: telegram_linked, telegram_username
+ */
+router.get('/telegram/status', authenticate, authController.getTelegramStatus);
+
+/**
+ * @swagger
+ * /api/auth/telegram/unlink:
+ *   delete:
+ *     summary: Gỡ liên kết Telegram (xóa chat_id trên user)
+ *     tags: [Authentication]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: Đã gỡ
+ */
+router.delete('/telegram/unlink', authenticate, authController.unlinkTelegram);
+
+/**
+ * @swagger
  * /api/auth/profile-icons:
  *   get:
  *     summary: Lấy danh sách icon ảnh đại diện có thể chọn

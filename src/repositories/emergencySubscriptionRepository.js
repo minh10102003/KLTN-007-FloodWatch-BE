@@ -149,6 +149,8 @@ class EmergencySubscriptionRepository extends BaseRepository {
                 u.email,
                 u.phone,
                 u.full_name,
+                u.telegram_chat_id,
+                u.telegram_username,
                 es.notification_methods,
                 ST_Distance(es.location, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography) as distance
             FROM emergency_subscriptions es

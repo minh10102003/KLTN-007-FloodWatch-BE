@@ -1,5 +1,7 @@
+const crypto = require('crypto');
 const userRepository = require('../repositories/userRepository');
 const userSessionRepository = require('../repositories/userSessionRepository');
+const telegramLinkRepository = require('../repositories/telegramLinkRepository');
 const otpService = require('../services/otpService');
 const bcrypt = require('bcrypt');
 const {
@@ -211,6 +213,45 @@ const userModel = {
      */
     async updateMyLocation(userId, payload) {
         return await userRepository.updateLastKnownLocation(userId, payload);
+    },
+
+    /**
+     * Tạo deep link liên kết Telegram (t.me/bot?start=token), TTL ngắn.
+     */
+    async createTelegramDeepLink(userId) {
+        const botUser = String(process.env.TELEGRAM_BOT_USERNAME || '')
+            .trim()
+            .replace(/^@/, '');
+        const botTok = String(process.env.TELEGRAM_BOT_TOKEN || '').trim();
+        if (!botUser) {
+            throw new Error('Chưa cấu hình TELEGRAM_BOT_USERNAME (username bot, không gồm @)');
+        }
+        if (!botTok) {
+            throw new Error('Chưa cấu hình TELEGRAM_BOT_TOKEN');
+        }
+        const ttl = Math.min(120, Math.max(5, parseInt(process.env.TELEGRAM_LINK_TTL_MINUTES || '15', 10)));
+        await telegramLinkRepository.deletePendingForUser(userId);
+        const raw = crypto.randomBytes(24).toString('hex').slice(0, 64);
+        await telegramLinkRepository.createLinkToken(raw, userId, ttl);
+        return {
+            deep_link: `https://t.me/${botUser}?start=${raw}`,
+            expires_in_minutes: ttl
+        };
+    },
+
+    async getTelegramLinkStatus(userId) {
+        const u = await userRepository.findById(userId);
+        if (!u) throw new Error('Không tìm thấy user');
+        return {
+            telegram_linked: !!(u.telegram_chat_id && String(u.telegram_chat_id).trim()),
+            telegram_username: u.telegram_username || null
+        };
+    },
+
+    async unlinkTelegram(userId) {
+        await telegramLinkRepository.deletePendingForUser(userId);
+        await userRepository.clearTelegramChat(userId);
+        return { ok: true };
     },
 
     /**

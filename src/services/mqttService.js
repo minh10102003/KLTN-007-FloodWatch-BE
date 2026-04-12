@@ -4,6 +4,7 @@ const sensorRepository = require('../repositories/sensorRepository');
 const floodRepository = require('../repositories/floodRepository');
 const alertRepository = require('../repositories/alertRepository');
 const emergencySubscriptionRepository = require('../repositories/emergencySubscriptionRepository');
+const emergencyAlertSendLogRepository = require('../repositories/emergencyAlertSendLogRepository');
 const emergencyNotificationService = require('./emergencyNotificationService');
 
 // Kalman Filter để lọc nhiễu
@@ -155,6 +156,16 @@ const updateSensorHealth = async (sensorId, status) => {
 };
 
 // Hàm kiểm tra và cập nhật sensor offline (nếu không có dữ liệu > 5 phút)
+function emergencyCooldownMinutes() {
+    return Math.min(1440, Math.max(5, parseInt(process.env.EMERGENCY_ALERT_COOLDOWN_MINUTES || '20', 10)));
+}
+
+/** Loại cảnh báo cho dedupe: danger vs warning + vận tốc cao */
+function buildEmergencyAlertKind(status) {
+    if (status === 'danger') return 'danger';
+    return 'warning_velocity';
+}
+
 const checkSensorHealth = async () => {
     try {
         const result = await sensorRepository.checkSensorHealth();
@@ -260,6 +271,8 @@ const init = () => {
 
                         if (subscribers.length > 0) {
                             console.log(`📢 [Alert] Sending emergency alerts to ${subscribers.length} subscribers for ${sensor_id}`);
+                            const alertKind = buildEmergencyAlertKind(status);
+                            const cooldownMin = emergencyCooldownMinutes();
                             const payload = {
                                 sensorId: sensor_id,
                                 locationName: sensor.location_name,
@@ -268,9 +281,36 @@ const init = () => {
                                 velocity,
                                 lng: parseFloat(sensor.lng),
                                 lat: parseFloat(sensor.lat),
-                                triggeredAt: new Date().toISOString()
+                                triggeredAt: new Date().toISOString(),
+                                alert_kind: alertKind
                             };
                             for (const subscriber of subscribers) {
+                                let skipSend = false;
+                                try {
+                                    skipSend = await emergencyAlertSendLogRepository.wasSentRecently(
+                                        sensor_id,
+                                        subscriber.user_id,
+                                        alertKind,
+                                        cooldownMin
+                                    );
+                                } catch (dedupeErr) {
+                                    if (dedupeErr.code === '42P01') {
+                                        console.warn(
+                                            '⚠️ [Alert] Bảng emergency_alert_send_log chưa có — chạy npm run migrate:emergency-alert-send-log (dedupe tạm tắt).'
+                                        );
+                                        skipSend = false;
+                                    } else {
+                                        console.error('❌ [Alert] Dedupe check failed:', dedupeErr.message);
+                                        skipSend = false;
+                                    }
+                                }
+                                if (skipSend) {
+                                    console.log(
+                                        `🔁 [Alert] Cooldown skip user=${subscriber.user_id} sensor=${sensor_id} kind=${alertKind} (${cooldownMin}m)`
+                                    );
+                                    continue;
+                                }
+
                                 const results = await emergencyNotificationService.notifySubscriber(
                                     subscriber,
                                     payload
@@ -282,6 +322,21 @@ const init = () => {
                                             .map((r) => `${r.channel}:${r.reason || 'unknown'}`)
                                             .join(' | ')}`
                                     );
+                                } else {
+                                    try {
+                                        await emergencyAlertSendLogRepository.recordSuccessfulSend(
+                                            sensor_id,
+                                            subscriber.user_id,
+                                            alertKind,
+                                            JSON.stringify(results)
+                                        );
+                                    } catch (logErr) {
+                                        if (logErr.code === '42P01') {
+                                            /* đã cảnh báo ở trên */
+                                        } else {
+                                            console.error('❌ [Alert] Ghi log gửi thành công thất bại:', logErr.message);
+                                        }
+                                    }
                                 }
                             }
                         }

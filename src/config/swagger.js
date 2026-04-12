@@ -114,6 +114,15 @@ const options = {
                             nullable: true,
                             description: 'Lần cập nhật vị trí gần nhất'
                         },
+                        telegram_linked: {
+                            type: 'boolean',
+                            description: 'Đã liên kết bot Telegram (chat riêng) — không trả raw chat_id'
+                        },
+                        telegram_username: {
+                            type: 'string',
+                            nullable: true,
+                            description: '@username Telegram nếu có'
+                        },
                         created_at: { type: 'string', format: 'date-time' }
                     }
                 },
@@ -277,6 +286,16 @@ const options = {
                 name: 'Research',
                 description:
                     'API hỗ trợ luận văn: đánh giá định lượng (MAE/RMSE) và phân tích vùng thiếu cảm biến (cold-start)'
+            },
+            {
+                name: 'Emergency Alerts',
+                description:
+                    'Thống kê cảnh báo khẩn đa kênh (admin): số lần gửi thành công đã ghi log sau dedupe'
+            },
+            {
+                name: 'Telegram',
+                description:
+                    'Webhook Bot API (không JWT): liên kết chat_id từng user qua /start token; xem POST /api/auth/telegram/link'
             },
             {
                 name: 'OTA Updates',

@@ -10,6 +10,16 @@ function getAllowedProfileIcons() {
     return fs.readdirSync(dir).filter(f => /\.(png|jpg|jpeg|gif|webp)$/i.test(f));
 }
 
+/** Không trả `telegram_chat_id` ra JSON; thêm cờ `telegram_linked`. */
+function toPublicProfileUser(user) {
+    if (!user) return user;
+    const { telegram_chat_id, ...rest } = user;
+    return {
+        ...rest,
+        telegram_linked: !!(telegram_chat_id && String(telegram_chat_id).trim())
+    };
+}
+
 const authController = {
     // Đăng ký
     register: async (req, res) => {
@@ -107,7 +117,7 @@ const authController = {
             const user = await userModel.getUserById(req.user.id);
             res.json({
                 success: true,
-                data: user
+                data: toPublicProfileUser(user)
             });
         } catch (err) {
             res.status(500).json({
@@ -200,7 +210,7 @@ const authController = {
             res.json({
                 success: true,
                 message: 'Cập nhật profile thành công',
-                data: user
+                data: toPublicProfileUser(user)
             });
         } catch (err) {
             res.status(500).json({
@@ -544,6 +554,34 @@ const authController = {
                 success: false,
                 error: err.message || 'Lỗi khi tính lại điểm tin cậy'
             });
+        }
+    },
+
+    /** Tạo deep link `t.me/<bot>?start=<token>` để user mở Telegram và liên kết chat riêng. */
+    createTelegramLink: async (req, res) => {
+        try {
+            const data = await userModel.createTelegramDeepLink(req.user.id);
+            res.json({ success: true, data });
+        } catch (err) {
+            res.status(400).json({ success: false, error: err.message });
+        }
+    },
+
+    getTelegramStatus: async (req, res) => {
+        try {
+            const data = await userModel.getTelegramLinkStatus(req.user.id);
+            res.json({ success: true, data });
+        } catch (err) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    },
+
+    unlinkTelegram: async (req, res) => {
+        try {
+            await userModel.unlinkTelegram(req.user.id);
+            res.json({ success: true, message: 'Đã gỡ liên kết Telegram' });
+        } catch (err) {
+            res.status(500).json({ success: false, error: err.message });
         }
     }
 };
