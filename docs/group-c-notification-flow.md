@@ -98,7 +98,7 @@ Mỗi tài khoản đã đăng nhập có thể **liên kết chat riêng** vớ
 **Biến môi trường:**
 - `TELEGRAM_BOT_TOKEN` — token từ BotFather.
 - `TELEGRAM_BOT_USERNAME` — username bot **không** có `@` (để tạo deep link `https://t.me/<bot>?start=<token>`).
-- `TELEGRAM_WEBHOOK_SECRET` (khuyến nghị) — truyền vào `setWebhook` làm `secret_token`; backend kiểm tra header `X-Telegram-Bot-Api-Secret-Token`.
+- `TELEGRAM_WEBHOOK_SECRET` (khuyến nghị) — truyền vào `setWebhook` làm `secret_token`; backend kiểm tra header `X-Telegram-Bot-Api-Secret-Token`. Telegram **chỉ** cho phép trong secret: chữ và số, `_`, `-` (không dùng chuỗi base64 có `=`).
 - `TELEGRAM_LINK_TTL_MINUTES` (tuỳ chọn, mặc định 15) — thời hạn token `/start`.
 
 **DB:** chạy `npm run migrate:telegram-per-user` (thêm cột + bảng `telegram_link_tokens`).

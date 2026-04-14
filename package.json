@@ -25,6 +25,9 @@
     "migrate:flood-ingest-key": "node scripts/runMigrationFloodLogsIngestKey.js",
     "migrate:emergency-alert-send-log": "node scripts/runMigrationEmergencyAlertSendLog.js",
     "migrate:telegram-per-user": "node scripts/runMigrationTelegramPerUser.js",
+    "migrate:road-graph": "node scripts/runMigrationRoadGraphTables.js",
+    "import:road-graph": "node scripts/importRoadGraph.js",
+    "map:road-sensors": "node scripts/mapRoadEdgesToSensors.js",
     "create-admin": "node scripts/createAdminUser.js",
     "check-moderation": "node scripts/checkModerationStatus.js"
   },

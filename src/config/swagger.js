@@ -274,6 +274,11 @@ const options = {
                 description: 'Dự báo mực nước ngắn hạn theo sensor (xu hướng tuyến tính từ flood_logs)'
             },
             {
+                name: 'Routing',
+                description:
+                    'AMC-A* tìm đường an toàn theo độ ngập và loại xe (MVP, cần nạp road graph: road_nodes/road_edges)'
+            },
+            {
                 name: 'Weather',
                 description:
                     'Thời tiết TP.HCM qua Open-Meteo (https://open-meteo.com/) — không cần API key'
