@@ -25,9 +25,55 @@ class RoutingRepository extends BaseRepository {
         );
     }
 
-    async getActiveEdgesWithFloodDepth() {
+    async getActiveEdgesWithFloodDepth({
+        crowdHours = 6,
+        crowdBufferM = 35,
+        crowdHalfLifeHours = 2,
+        crowdMinReliability = 40,
+        crowdMaxBoost = 2
+    } = {}) {
         return this.queryAll(
             `
+            WITH crowd_recent AS (
+                SELECT
+                    location,
+                    reliability_score,
+                    EXTRACT(EPOCH FROM (NOW() - created_at)) / 3600.0 AS age_hours,
+                    CASE
+                        WHEN LOWER(TRIM(flood_level)) IN ('nhẹ', 'nhe', 'light', 'mild') THEN 12
+                        WHEN LOWER(TRIM(flood_level)) IN ('trung bình', 'trung binh', 'medium', 'moderate') THEN 25
+                        WHEN LOWER(TRIM(flood_level)) IN ('nặng', 'nang', 'heavy', 'severe') THEN 45
+                        ELSE NULL
+                    END AS flood_cm
+                FROM crowd_reports
+                WHERE moderation_status = 'approved'
+                  AND COALESCE(reliability_score, 50) >= $4
+                  AND created_at >= NOW() - ($1::int * INTERVAL '1 hour')
+            ),
+            crowd_weighted AS (
+                SELECT
+                    location,
+                    flood_cm,
+                    LEAST(
+                        500.0,
+                        flood_cm
+                        * EXP(-(LN(2) * age_hours / GREATEST($3::double precision, 0.25)))
+                        * (0.6 + LEAST(100, GREATEST(0, COALESCE(reliability_score, 50))) / 100.0)
+                        * GREATEST($5::double precision, 1.0)
+                    ) AS weighted_flood_cm
+                FROM crowd_recent
+                WHERE flood_cm IS NOT NULL
+            ),
+            crowd_edge AS (
+                SELECT
+                    e.id AS edge_id,
+                    MAX(cw.weighted_flood_cm) AS crowd_flood_cm
+                FROM road_edges e
+                INNER JOIN crowd_weighted cw
+                    ON ST_DWithin(e.geom, cw.location, $2)
+                WHERE e.is_active = TRUE
+                GROUP BY e.id
+            )
             SELECT
                 e.id,
                 e.from_node_id,
@@ -41,7 +87,10 @@ class RoutingRepository extends BaseRepository {
                 ST_Y(tn.location::geometry) AS to_lat,
                 COALESCE(
                     e.manual_flood_depth_cm,
-                    lf.water_level,
+                    GREATEST(
+                        COALESCE(lf.water_level, 0),
+                        COALESCE(ce.crowd_flood_cm, 0)
+                    ),
                     0
                 ) AS flood_depth_cm
             FROM road_edges e
@@ -54,8 +103,10 @@ class RoutingRepository extends BaseRepository {
                 ORDER BY fl.created_at DESC
                 LIMIT 1
             ) lf ON true
+            LEFT JOIN crowd_edge ce ON ce.edge_id = e.id
             WHERE e.is_active = TRUE
-            `
+            `,
+            [crowdHours, crowdBufferM, crowdHalfLifeHours, crowdMinReliability, crowdMaxBoost]
         );
     }
 

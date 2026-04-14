@@ -195,10 +195,37 @@ const routingService = {
             Math.max(150, parseInt(nearest_node_max_m || process.env.ROUTING_NEAREST_NODE_MAX_M || '1200', 10))
         );
 
+        const crowdHours = Math.min(
+            72,
+            Math.max(1, parseInt(process.env.ROUTING_CROWD_REPORT_HOURS || '6', 10))
+        );
+        const crowdBufferM = Math.min(
+            200,
+            Math.max(5, parseInt(process.env.ROUTING_CROWD_EDGE_BUFFER_M || '35', 10))
+        );
+        const crowdHalfLifeHours = Math.min(
+            24,
+            Math.max(1, parseInt(process.env.ROUTING_CROWD_RECENCY_HALF_LIFE_HOURS || '2', 10))
+        );
+        const crowdMinReliability = Math.min(
+            100,
+            Math.max(0, parseInt(process.env.ROUTING_CROWD_MIN_RELIABILITY || '40', 10))
+        );
+        const crowdMaxBoost = Math.min(
+            3,
+            Math.max(1, Number(process.env.ROUTING_CROWD_MAX_BOOST || '1.5'))
+        );
+
         const [startNode, endNode, edges] = await Promise.all([
             routingRepository.getNearestNode({ lng: Number(start_lng), lat: Number(start_lat), maxDistanceMeters: maxNearest }),
             routingRepository.getNearestNode({ lng: Number(end_lng), lat: Number(end_lat), maxDistanceMeters: maxNearest }),
-            routingRepository.getActiveEdgesWithFloodDepth()
+            routingRepository.getActiveEdgesWithFloodDepth({
+                crowdHours,
+                crowdBufferM,
+                crowdHalfLifeHours,
+                crowdMinReliability,
+                crowdMaxBoost
+            })
         ]);
 
         if (!startNode || !endNode) {
@@ -237,6 +264,13 @@ const routingService = {
         return {
             found: true,
             vehicle,
+            flood_sources: {
+                crowd_report_hours: crowdHours,
+                crowd_edge_buffer_m: crowdBufferM,
+                crowd_recency_half_life_hours: crowdHalfLifeHours,
+                crowd_min_reliability: crowdMinReliability,
+                crowd_max_boost: crowdMaxBoost
+            },
             start_node: startNode,
             end_node: endNode,
             node_path: result.nodePath,
