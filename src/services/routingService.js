@@ -121,7 +121,7 @@ function adjacencyFromEdges(edges) {
     return { adj, nodePos };
 }
 
-function aStar({ startNodeId, targetNodeId, adj, nodePos, vehicle }) {
+function aStar({ startNodeId, targetNodeId, adj, nodePos, vehicle, isDryNetwork }) {
     const open = new Set([startNodeId]);
     const cameFrom = new Map();
     const cameByEdge = new Map();
@@ -130,6 +130,7 @@ function aStar({ startNodeId, targetNodeId, adj, nodePos, vehicle }) {
     const blockedEdgeIds = new Set();
     const nearLimitEdgeIds = new Set();
     const maxSpeed = (() => {
+        if (isDryNetwork) return 1; // không dùng trong chế độ shortest path
         let s = 0;
         for (const list of adj.values()) {
             for (const e of list) s = Math.max(s, e.speedLimitMps);
@@ -141,7 +142,8 @@ function aStar({ startNodeId, targetNodeId, adj, nodePos, vehicle }) {
         const p1 = nodePos.get(nodeId);
         const p2 = nodePos.get(targetNodeId);
         if (!p1 || !p2) return 0;
-        return haversineMeters({ lng: p1.lng, lat: p1.lat }, { lng: p2.lng, lat: p2.lat }) / maxSpeed;
+        const dist = haversineMeters({ lng: p1.lng, lat: p1.lat }, { lng: p2.lng, lat: p2.lat });
+        return isDryNetwork ? dist : dist / maxSpeed;
     }
 
     function popLowestFScore() {
@@ -176,15 +178,24 @@ function aStar({ startNodeId, targetNodeId, adj, nodePos, vehicle }) {
 
         const neighbors = adj.get(current) || [];
         for (const edge of neighbors) {
-            const penalty = floodPenalty(edge.floodDepthCm, vehicle.maxWadingDepthCm);
-            if (!Number.isFinite(penalty)) {
-                blockedEdgeIds.add(edge.edgeId);
-                continue;
-            }
-            if (penalty >= 5) nearLimitEdgeIds.add(edge.edgeId);
+            let edgeCost;
 
-            const travelSec = edge.lengthM / edge.speedLimitMps;
-            const tentative = (gScore.get(current) ?? Number.POSITIVE_INFINITY) + travelSec * penalty;
+            if (isDryNetwork) {
+                // Không có ngập ở bất cứ đâu: tối ưu quãng đường (m).
+                edgeCost = edge.lengthM;
+            } else {
+                const penalty = floodPenalty(edge.floodDepthCm, vehicle.maxWadingDepthCm);
+                if (!Number.isFinite(penalty)) {
+                    blockedEdgeIds.add(edge.edgeId);
+                    continue;
+                }
+                if (penalty >= 5) nearLimitEdgeIds.add(edge.edgeId);
+
+                const travelSec = edge.lengthM / edge.speedLimitMps;
+                edgeCost = travelSec * penalty;
+            }
+
+            const tentative = (gScore.get(current) ?? Number.POSITIVE_INFINITY) + edgeCost;
             if (tentative < (gScore.get(edge.to) ?? Number.POSITIVE_INFINITY)) {
                 cameFrom.set(edge.to, current);
                 cameByEdge.set(edge.to, edge);
@@ -201,6 +212,7 @@ function aStar({ startNodeId, targetNodeId, adj, nodePos, vehicle }) {
 function buildSegmentOutput(nodePath, nodePos, cameByEdge) {
     const segments = [];
     let totalLengthM = 0;
+    let totalTimeSec = 0;
     for (let i = 1; i < nodePath.length; i++) {
         const toNodeId = nodePath[i];
         const fromNodeId = nodePath[i - 1];
@@ -209,6 +221,7 @@ function buildSegmentOutput(nodePath, nodePos, cameByEdge) {
         const fromPos = nodePos.get(fromNodeId);
         const toPos = nodePos.get(toNodeId);
         totalLengthM += edge.lengthM;
+        totalTimeSec += edge.lengthM / edge.speedLimitMps;
         segments.push({
             edge_id: edge.edgeId,
             from_node_id: fromNodeId,
@@ -220,7 +233,7 @@ function buildSegmentOutput(nodePath, nodePos, cameByEdge) {
             to: toPos ? { lng: toPos.lng, lat: toPos.lat } : null
         });
     }
-    return { segments, totalLengthM };
+    return { segments, totalLengthM, totalTimeSec };
 }
 
 const routingService = {
@@ -303,12 +316,15 @@ const routingService = {
             throw new Error('Start/End node không nằm trong đồ thị đường đang active.');
         }
 
+        const hasAnyFlood = edges.some((e) => Number(e.flood_depth_cm) > 0);
+
         const result = aStar({
             startNodeId,
             targetNodeId: endNodeId,
             adj,
             nodePos,
-            vehicle
+            vehicle,
+            isDryNetwork: !hasAnyFlood
         });
 
         if (!result) {
@@ -321,7 +337,7 @@ const routingService = {
             };
         }
 
-        const { segments, totalLengthM } = buildSegmentOutput(result.nodePath, nodePos, result.cameByEdge);
+        const { segments, totalLengthM, totalTimeSec } = buildSegmentOutput(result.nodePath, nodePos, result.cameByEdge);
         return {
             found: true,
             vehicle,
@@ -336,7 +352,7 @@ const routingService = {
             end_node: endNode,
             node_path: result.nodePath,
             route: {
-                total_cost_sec: Number(result.totalCostSec.toFixed(2)),
+                total_cost_sec: Number(totalTimeSec.toFixed(2)),
                 total_distance_m: Number(totalLengthM.toFixed(2)),
                 segments
             },
