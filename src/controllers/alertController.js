@@ -1,105 +1,117 @@
 const alertRepository = require('../repositories/alertRepository');
 
+function parseIntOrDefault(value, defaultValue) {
+    const parsed = parseInt(value, 10);
+    return Number.isNaN(parsed) ? defaultValue : parsed;
+}
+
+function handleError(res, err) {
+    return res.status(500).json({ success: false, error: err.message });
+}
+
 const alertController = {
     // Lấy tất cả alerts
-    getAllAlerts: async (req, res) => {
+    async getAllAlerts(req, res) {
         try {
             const { status, severity, alert_type, sensor_id, limit, offset } = req.query;
-            const data = await alertRepository.getAllAlerts({
+
+            const alerts = await alertRepository.getAllAlerts({
                 status,
                 severity,
                 alert_type,
                 sensor_id,
-                limit: parseInt(limit) || 100,
-                offset: parseInt(offset) || 0
+                limit: parseIntOrDefault(limit, 100),
+                offset: parseIntOrDefault(offset, 0)
             });
-            res.json({
+
+            return res.json({
                 success: true,
-                data: data
+                data: alerts
             });
         } catch (err) {
-            res.status(500).json({ success: false, error: err.message });
+            return handleError(res, err);
         }
     },
 
     // Lấy alerts đang active
-    getActiveAlerts: async (req, res) => {
+    async getActiveAlerts(req, res) {
         try {
-            const data = await alertRepository.getActiveAlerts();
-            res.json({
+            const activeAlerts = await alertRepository.getActiveAlerts();
+            return res.json({
                 success: true,
-                data: data
+                data: activeAlerts
             });
         } catch (err) {
-            res.status(500).json({ success: false, error: err.message });
+            return handleError(res, err);
         }
     },
 
     // Lấy alert theo ID
-    getAlertById: async (req, res) => {
+    async getAlertById(req, res) {
         try {
             const { alertId } = req.params;
-            const data = await alertRepository.getAlertById(alertId);
-            
-            if (!data) {
+            const alert = await alertRepository.getAlertById(alertId);
+
+            if (!alert) {
                 return res.status(404).json({
                     success: false,
                     error: 'Alert không tồn tại'
                 });
             }
 
-            res.json({
+            return res.json({
                 success: true,
-                data: data
+                data: alert
             });
         } catch (err) {
-            res.status(500).json({ success: false, error: err.message });
+            return handleError(res, err);
         }
     },
 
     // Acknowledge alert
-    acknowledgeAlert: async (req, res) => {
+    async acknowledgeAlert(req, res) {
         try {
             const { alertId } = req.params;
-            const data = await alertRepository.acknowledgeAlert(alertId, req.user.id);
-            res.json({
+            const updatedAlert = await alertRepository.acknowledgeAlert(alertId, req.user.id);
+
+            return res.json({
                 success: true,
                 message: 'Đã xác nhận alert',
-                data: data
+                data: updatedAlert
             });
         } catch (err) {
-            res.status(500).json({ success: false, error: err.message });
+            return handleError(res, err);
         }
     },
 
     // Resolve alert
-    resolveAlert: async (req, res) => {
+    async resolveAlert(req, res) {
         try {
             const { alertId } = req.params;
-            const data = await alertRepository.resolveAlert(alertId);
-            res.json({
+            const resolvedAlert = await alertRepository.resolveAlert(alertId);
+
+            return res.json({
                 success: true,
                 message: 'Đã đánh dấu alert đã xử lý',
-                data: data
+                data: resolvedAlert
             });
         } catch (err) {
-            res.status(500).json({ success: false, error: err.message });
+            return handleError(res, err);
         }
     },
 
     // Thống kê alerts
-    getAlertStats: async (req, res) => {
+    async getAlertStats(req, res) {
         try {
-            const data = await alertRepository.countAlertsByStatus();
-            res.json({
+            const stats = await alertRepository.countAlertsByStatus();
+            return res.json({
                 success: true,
-                data: data
+                data: stats
             });
         } catch (err) {
-            res.status(500).json({ success: false, error: err.message });
+            return handleError(res, err);
         }
     }
 };
 
 module.exports = alertController;
-

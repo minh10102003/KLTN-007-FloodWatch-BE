@@ -6,6 +6,25 @@ const VEHICLE_PROFILES = {
     suv: { name: 'SUV', maxWadingDepthCm: 50 }
 };
 
+function toFiniteNumber(value) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+}
+
+function parseIntInRange(value, defaultValue, min, max) {
+    const parsed = parseInt(value, 10);
+    const base = Number.isNaN(parsed) ? defaultValue : parsed;
+    const clamped = Math.max(min, Math.min(max, base));
+    return clamped;
+}
+
+function parseFloatInRange(value, defaultValue, min, max) {
+    const parsed = Number(value);
+    const base = Number.isFinite(parsed) ? parsed : defaultValue;
+    const clamped = Math.max(min, Math.min(max, base));
+    return clamped;
+}
+
 function floodPenalty(depthCm, maxWadingDepthCm) {
     const d = Number(depthCm) || 0;
     if (d <= 0) return 1.0;
@@ -46,7 +65,7 @@ function adjacencyFromEdges(edges) {
     const nodePos = new Map();
 
     function addNode(id, lng, lat) {
-        if (!nodePos.has(id)) nodePos.set(id, { lng: Number(lng), lat: Number(lat) });
+        if (!nodePos.has(id)) nodePos.set(id, { lng, lat });
     }
 
     function addEdge(from, to, edge) {
@@ -57,23 +76,45 @@ function adjacencyFromEdges(edges) {
     for (const e of edges) {
         const from = Number(e.from_node_id);
         const to = Number(e.to_node_id);
-        addNode(from, e.from_lng, e.from_lat);
-        addNode(to, e.to_lng, e.to_lat);
+
+        if (!Number.isInteger(from) || !Number.isInteger(to)) {
+            continue;
+        }
+
+        const fromLng = toFiniteNumber(e.from_lng);
+        const fromLat = toFiniteNumber(e.from_lat);
+        const toLng = toFiniteNumber(e.to_lng);
+        const toLat = toFiniteNumber(e.to_lat);
+        const lengthM = toFiniteNumber(e.length_m);
+        const speedLimit = toFiniteNumber(e.speed_limit_mps);
+        const floodDepth = toFiniteNumber(e.flood_depth_cm) ?? 0;
+
+        if (fromLng == null || fromLat == null || toLng == null || toLat == null) {
+            continue;
+        }
+        if (lengthM == null || lengthM <= 0) {
+            continue;
+        }
+
+        const speedLimitMps = Math.max(0.1, speedLimit ?? 0.1);
+
+        addNode(from, fromLng, fromLat);
+        addNode(to, toLng, toLat);
 
         addEdge(from, to, {
             edgeId: Number(e.id),
             to,
-            lengthM: Number(e.length_m),
-            speedLimitMps: Math.max(0.1, Number(e.speed_limit_mps)),
-            floodDepthCm: Number(e.flood_depth_cm) || 0
+            lengthM,
+            speedLimitMps,
+            floodDepthCm: floodDepth
         });
         if (e.is_bidirectional) {
             addEdge(to, from, {
                 edgeId: Number(e.id),
                 to: from,
-                lengthM: Number(e.length_m),
-                speedLimitMps: Math.max(0.1, Number(e.speed_limit_mps)),
-                floodDepthCm: Number(e.flood_depth_cm) || 0
+                lengthM,
+                speedLimitMps,
+                floodDepthCm: floodDepth
             });
         }
     }
@@ -189,36 +230,56 @@ const routingService = {
             const allow = Object.keys(VEHICLE_PROFILES).join(', ');
             throw new Error(`vehicle_type không hợp lệ. Cho phép: ${allow}`);
         }
+        const startLng = toFiniteNumber(start_lng);
+        const startLat = toFiniteNumber(start_lat);
+        const endLng = toFiniteNumber(end_lng);
+        const endLat = toFiniteNumber(end_lat);
 
-        const maxNearest = Math.min(
-            5000,
-            Math.max(150, parseInt(nearest_node_max_m || process.env.ROUTING_NEAREST_NODE_MAX_M || '1200', 10))
+        if (startLng == null || startLat == null || endLng == null || endLat == null) {
+            throw new Error('Tọa độ start/end không hợp lệ.');
+        }
+
+        const maxNearest = parseIntInRange(
+            nearest_node_max_m ?? process.env.ROUTING_NEAREST_NODE_MAX_M,
+            1200,
+            150,
+            5000
         );
 
-        const crowdHours = Math.min(
-            72,
-            Math.max(1, parseInt(process.env.ROUTING_CROWD_REPORT_HOURS || '6', 10))
+        const crowdHours = parseIntInRange(
+            process.env.ROUTING_CROWD_REPORT_HOURS,
+            6,
+            1,
+            72
         );
-        const crowdBufferM = Math.min(
-            200,
-            Math.max(5, parseInt(process.env.ROUTING_CROWD_EDGE_BUFFER_M || '35', 10))
+        const crowdBufferM = parseIntInRange(
+            process.env.ROUTING_CROWD_EDGE_BUFFER_M,
+            35,
+            5,
+            200
         );
-        const crowdHalfLifeHours = Math.min(
-            24,
-            Math.max(1, parseInt(process.env.ROUTING_CROWD_RECENCY_HALF_LIFE_HOURS || '2', 10))
+        const crowdHalfLifeHours = parseIntInRange(
+            process.env.ROUTING_CROWD_RECENCY_HALF_LIFE_HOURS,
+            2,
+            1,
+            24
         );
-        const crowdMinReliability = Math.min(
-            100,
-            Math.max(0, parseInt(process.env.ROUTING_CROWD_MIN_RELIABILITY || '40', 10))
+        const crowdMinReliability = parseIntInRange(
+            process.env.ROUTING_CROWD_MIN_RELIABILITY,
+            40,
+            0,
+            100
         );
-        const crowdMaxBoost = Math.min(
-            3,
-            Math.max(1, Number(process.env.ROUTING_CROWD_MAX_BOOST || '1.5'))
+        const crowdMaxBoost = parseFloatInRange(
+            process.env.ROUTING_CROWD_MAX_BOOST,
+            1.5,
+            1,
+            3
         );
 
         const [startNode, endNode, edges] = await Promise.all([
-            routingRepository.getNearestNode({ lng: Number(start_lng), lat: Number(start_lat), maxDistanceMeters: maxNearest }),
-            routingRepository.getNearestNode({ lng: Number(end_lng), lat: Number(end_lat), maxDistanceMeters: maxNearest }),
+            routingRepository.getNearestNode({ lng: startLng, lat: startLat, maxDistanceMeters: maxNearest }),
+            routingRepository.getNearestNode({ lng: endLng, lat: endLat, maxDistanceMeters: maxNearest }),
             routingRepository.getActiveEdgesWithFloodDepth({
                 crowdHours,
                 crowdBufferM,
