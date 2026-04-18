@@ -1,17 +1,41 @@
 /**
- * Map road_edges.flood_sensor_id theo sensor gần nhất (active).
+ * Map road_edges.flood_sensor_id theo sensor active gần nhất (phương án 1 — thu hẹp gắn sensor).
+ *
+ * Chỉ gán khi khoảng cách centroid(cạnh) → sensor <= maxDistanceM. Nên để maxDistance ~ cùng bậc với
+ * ROUTING_SENSOR_FLOOD_RADIUS_M (routing) để không gắn cả tuyến dài vào một trạm rồi mới “giảm” bằng code.
+ *
+ * Thứ tự ưu tiên khoảng cách mặc định:
+ *   1) CLI --max-distance-m
+ *   2) env ROUTING_EDGE_SENSOR_MAX_DISTANCE_M
+ *   3) env ROUTING_SENSOR_FLOOD_RADIUS_M * 1.25 (làm tròn, clamp 50..400)
+ *   4) 150 (m)
  *
  * Usage:
- *   node scripts/mapRoadEdgesToSensors.js
- *   node scripts/mapRoadEdgesToSensors.js --max-distance-m 3000
- *   node scripts/mapRoadEdgesToSensors.js --max-distance-m 3000 --clear-out-of-range
+ *   npm run map:road-sensors
+ *   node scripts/mapRoadEdgesToSensors.js --max-distance-m 200 --clear-out-of-range
  */
 const { Pool } = require('pg');
 require('dotenv').config();
 
+const MAP_DISTANCE_MIN_M = 50;
+const MAP_DISTANCE_MAX_M = 20000;
+
+function resolveDefaultMapMaxDistanceM() {
+    const edgeEnv = process.env.ROUTING_EDGE_SENSOR_MAX_DISTANCE_M;
+    if (edgeEnv != null && String(edgeEnv).trim() !== '') {
+        const n = Number(edgeEnv);
+        if (Number.isFinite(n) && n > 0) return n;
+    }
+    const r = parseInt(process.env.ROUTING_SENSOR_FLOOD_RADIUS_M || '120', 10);
+    if (Number.isFinite(r) && r > 0) {
+        return Math.min(400, Math.max(50, Math.round(r * 1.25)));
+    }
+    return 150;
+}
+
 function parseArgs(argv) {
     const out = {
-        maxDistanceM: Number(process.env.ROUTING_EDGE_SENSOR_MAX_DISTANCE_M || 2500),
+        maxDistanceM: resolveDefaultMapMaxDistanceM(),
         clearOutOfRange: false
     };
     for (let i = 2; i < argv.length; i++) {
@@ -19,7 +43,7 @@ function parseArgs(argv) {
         if (a === '--max-distance-m') out.maxDistanceM = Number(argv[++i]) || out.maxDistanceM;
         else if (a === '--clear-out-of-range') out.clearOutOfRange = true;
     }
-    out.maxDistanceM = Math.min(20000, Math.max(50, out.maxDistanceM));
+    out.maxDistanceM = Math.min(MAP_DISTANCE_MAX_M, Math.max(MAP_DISTANCE_MIN_M, out.maxDistanceM));
     return out;
 }
 
@@ -70,7 +94,9 @@ async function run() {
     const pool = buildPool();
     const client = await pool.connect();
     try {
-        console.log(`ℹ️  Mapping flood_sensor_id với maxDistance=${args.maxDistanceM}m ...`);
+        console.log(
+            `ℹ️  Mapping flood_sensor_id (nearest active sensor, centroid→sensor) maxDistance=${args.maxDistanceM}m ...`
+        );
         await client.query('BEGIN');
 
         const mapped = await client.query(

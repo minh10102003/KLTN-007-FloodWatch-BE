@@ -46,7 +46,7 @@ GET /api/v1/routing/safe-path?start_lng=106.70098&start_lat=10.77689&end_lng=106
 - `route.segments[]`: mảng đoạn đường để FE vẽ polyline
 - `avoided.blocked_edge_ids`: đoạn bị loại vì ngập quá ngưỡng xe
 - `avoided.near_limit_edge_ids`: đoạn sát ngưỡng an toàn
-- `flood_sources`: thông tin nguồn ngập dùng trong tính route (sensor + crowd reports cấu hình theo env)
+- `flood_sources`: thông tin nguồn ngập dùng trong tính route (sensor theo bán kính + crowd reports cấu hình theo env)
 
 ### FE cần làm
 
@@ -66,7 +66,10 @@ Ghi chú mới:
   - `ROUTING_CROWD_RECENCY_HALF_LIFE_HOURS`
   - `ROUTING_CROWD_MIN_RELIABILITY`
   - `ROUTING_CROWD_MAX_BOOST`
+  - `ROUTING_SENSOR_FLOOD_RADIUS_M` (mặc định 120)
+  - `ROUTING_SENSOR_FLOOD_DECAY` (`linear` | `plateau`)
 - Crowd report càng mới và reliability càng cao thì tác động né ngập càng mạnh.
+- **Sensor:** mực nước từ `flood_logs` không còn áp “full” cho mọi edge gắn `flood_sensor_id`; chỉ còn hiệu lực trong bán kính quanh `sensors.coords` (xem `sensor_flood_radius_m`, `sensor_flood_decay` trong response). Ngoài bán kính, phần từ sensor coi như 0 (crowd/manual vẫn có thể tăng ngập).
 
 ---
 
@@ -190,6 +193,21 @@ Ghi chú:
 - `manual_flood_depth_cm = null` => bỏ override, quay về dữ liệu sensor/flood_logs.
 - Dùng cho demo “đường tránh ngập” trên FE nhanh, không cần đợi sensor thật.
 
+### Map `flood_sensor_id` (ops / DevOps — phương án 1)
+
+Không phải REST API: chạy trên máy hoặc job CI có `DATABASE_URL`.
+
+```bash
+npm run map:road-sensors
+# khuyến nghị: xóa gán sensor cho cạnh nào không còn sensor nào trong phạm vi
+npm run map:road-sensors -- --clear-out-of-range
+# tuỳ chỉnh (mét), ghi đè env:
+node scripts/mapRoadEdgesToSensors.js --max-distance-m 120 --clear-out-of-range
+```
+
+- Mặc định script: **150 m** nếu không set `ROUTING_EDGE_SENSOR_MAX_DISTANCE_M`; nếu chỉ có `ROUTING_SENSOR_FLOOD_RADIUS_M` thì dùng **≈ R×1.25** (clamp 50–400 m).
+- Kết hợp **phương án 2** (bọng nước quanh tọa độ sensor khi tính route): map chặt (1) + suy giảm theo khoảng cách khi query (2) → ít “nhuộm ngập” cả tuyến.
+
 ---
 
 ## 2.2 Thống kê cảnh báo khẩn
@@ -245,6 +263,7 @@ Auth: Admin JWT
 3. Admin simulation page:
    - batch update `manual_flood_depth_cm`
    - nút reset về `null`
+   - (Ops) chạy `map:road-sensors` sau khi import graph / đổi vị trí trạm — xem mục phụ “Map `flood_sensor_id`” ngay dưới 2.1
 4. Admin monitoring page:
    - emergency summary
    - devices health

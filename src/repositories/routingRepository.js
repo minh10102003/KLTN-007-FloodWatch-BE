@@ -30,8 +30,11 @@ class RoutingRepository extends BaseRepository {
         crowdBufferM = 35,
         crowdHalfLifeHours = 2,
         crowdMinReliability = 40,
-        crowdMaxBoost = 2
+        crowdMaxBoost = 2,
+        sensorFloodRadiusM = 120,
+        sensorFloodDecay = 'linear'
     } = {}) {
+        const decay = String(sensorFloodDecay || 'linear').trim().toLowerCase() === 'plateau' ? 'plateau' : 'linear';
         return this.queryAll(
             `
             WITH crowd_recent AS (
@@ -88,7 +91,21 @@ class RoutingRepository extends BaseRepository {
                 COALESCE(
                     e.manual_flood_depth_cm,
                     GREATEST(
-                        COALESCE(lf.water_level, 0),
+                        COALESCE(
+                            CASE
+                                WHEN sl.raw_wl IS NULL THEN 0::double precision
+                                WHEN sens.coords IS NULL THEN sl.raw_wl::double precision
+                                WHEN sl.dist_m IS NULL THEN sl.raw_wl::double precision
+                                WHEN sl.dist_m >= $6::double precision THEN 0::double precision
+                                WHEN $7::text = 'plateau' THEN sl.raw_wl::double precision
+                                ELSE GREATEST(
+                                    0::double precision,
+                                    sl.raw_wl::double precision
+                                        * (1.0 - sl.dist_m / NULLIF($6::double precision, 0))
+                                )
+                            END,
+                            0::double precision
+                        ),
                         COALESCE(ce.crowd_flood_cm, 0)
                     ),
                     0
@@ -96,17 +113,23 @@ class RoutingRepository extends BaseRepository {
             FROM road_edges e
             INNER JOIN road_nodes fn ON fn.id = e.from_node_id
             INNER JOIN road_nodes tn ON tn.id = e.to_node_id
+            LEFT JOIN sensors sens ON sens.sensor_id = e.flood_sensor_id
             LEFT JOIN LATERAL (
-                SELECT fl.water_level
+                SELECT
+                    fl.water_level AS raw_wl,
+                    CASE
+                        WHEN sens.coords IS NULL THEN NULL::double precision
+                        ELSE ST_Distance(e.geom, sens.coords)
+                    END AS dist_m
                 FROM flood_logs fl
                 WHERE fl.sensor_id = e.flood_sensor_id
                 ORDER BY fl.created_at DESC
                 LIMIT 1
-            ) lf ON true
+            ) sl ON true
             LEFT JOIN crowd_edge ce ON ce.edge_id = e.id
             WHERE e.is_active = TRUE
             `,
-            [crowdHours, crowdBufferM, crowdHalfLifeHours, crowdMinReliability, crowdMaxBoost]
+            [crowdHours, crowdBufferM, crowdHalfLifeHours, crowdMinReliability, crowdMaxBoost, sensorFloodRadiusM, decay]
         );
     }
 

@@ -290,6 +290,15 @@ const routingService = {
             3
         );
 
+        const sensorFloodRadiusM = parseIntInRange(
+            process.env.ROUTING_SENSOR_FLOOD_RADIUS_M,
+            120,
+            30,
+            500
+        );
+        const rawSensorDecay = String(process.env.ROUTING_SENSOR_FLOOD_DECAY || 'linear').trim().toLowerCase();
+        const sensorFloodDecay = rawSensorDecay === 'plateau' ? 'plateau' : 'linear';
+
         const [startNode, endNode, edges] = await Promise.all([
             routingRepository.getNearestNode({ lng: startLng, lat: startLat, maxDistanceMeters: maxNearest }),
             routingRepository.getNearestNode({ lng: endLng, lat: endLat, maxDistanceMeters: maxNearest }),
@@ -298,7 +307,9 @@ const routingService = {
                 crowdBufferM,
                 crowdHalfLifeHours,
                 crowdMinReliability,
-                crowdMaxBoost
+                crowdMaxBoost,
+                sensorFloodRadiusM,
+                sensorFloodDecay
             })
         ]);
 
@@ -346,7 +357,9 @@ const routingService = {
                 crowd_edge_buffer_m: crowdBufferM,
                 crowd_recency_half_life_hours: crowdHalfLifeHours,
                 crowd_min_reliability: crowdMinReliability,
-                crowd_max_boost: crowdMaxBoost
+                crowd_max_boost: crowdMaxBoost,
+                sensor_flood_radius_m: sensorFloodRadiusM,
+                sensor_flood_decay: sensorFloodDecay
             },
             start_node: startNode,
             end_node: endNode,
