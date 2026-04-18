@@ -1,6 +1,15 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
+const isLocal = !process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_ENVIRONMENT === 'local';
+const internalHost = process.env.DB_HOST && process.env.DB_HOST.includes('.railway.internal');
+
+if (isLocal && internalHost && !process.env.DATABASE_URL) {
+    console.error('\n❌ LỖI KẾT NỐI: Bạn đang chạy ở máy local nhưng lại dùng host nội bộ của Railway (postgis.railway.internal).');
+    console.error('👉 Vui lòng sử dụng "Public Connection String" từ tab Connect của Railway và gán vào biến DATABASE_URL.\n');
+    process.exit(1);
+}
+
 const pool = new Pool(
     process.env.DATABASE_URL 
     ? { connectionString: process.env.DATABASE_URL } 
