@@ -121,6 +121,7 @@ SELECT
         GREATEST(
             COALESCE(
                 CASE
+                    WHEN sens.status = 'offline' OR sens.is_active = FALSE THEN 0::double precision
                     WHEN sl.raw_wl IS NULL THEN 0::double precision
                     WHEN sens.coords IS NULL THEN sl.raw_wl::double precision
                     WHEN sl.dist_m IS NULL THEN sl.raw_wl::double precision

@@ -34,15 +34,15 @@ const floodController = {
             
             // Format dữ liệu cho Frontend với trạng thái rõ ràng
             const formattedData = data.map(item => {
-                // Xác định trạng thái cuối cùng (ưu tiên sensor_status nếu offline)
-                let finalStatus = item.sensor_status === 'offline' ? 'offline' : (item.log_status || item.sensor_status || 'normal');
+                const isOffline = item.sensor_status === 'offline';
+                let finalStatus = isOffline ? 'offline' : (item.log_status || item.sensor_status || 'normal');
                 
                 return {
                     sensor_id: item.sensor_id,
                     location_name: item.location_name,
                     model: item.model,
-                    water_level: item.water_level || 0,
-                    velocity: item.velocity,
+                    water_level: isOffline ? 0 : (item.water_level || 0),
+                    velocity: isOffline ? 0 : item.velocity,
                     status: finalStatus,
                     lng: parseFloat(item.lng),
                     lat: parseFloat(item.lat),
@@ -50,8 +50,8 @@ const floodController = {
                     danger_threshold: item.danger_threshold || 30,
                     last_data_time: item.last_data_time,
                     created_at: item.created_at,
-                    temperature: item.temperature != null ? parseFloat(item.temperature) : null,
-                    humidity: item.humidity != null ? parseFloat(item.humidity) : null
+                    temperature: isOffline ? null : (item.temperature != null ? parseFloat(item.temperature) : null),
+                    humidity: isOffline ? null : (item.humidity != null ? parseFloat(item.humidity) : null)
                 };
             });
             
