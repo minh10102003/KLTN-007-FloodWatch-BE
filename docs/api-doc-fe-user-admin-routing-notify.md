@@ -1,5 +1,7 @@
 # API doc cho FE: Routing + Notification (tách User/Admin)
 
+**Bản tổng hợp cập nhật cho FE (changelog + hành vi + test):** [`docs/fe-integration-update-full.md`](./fe-integration-update-full.md)
+
 Tài liệu này gom các API cần cho FE sau các luồng mới (AMC-A* routing + notification C1), phân rõ quyền **User** và **Admin**.
 
 Base URL ví dụ:
@@ -47,6 +49,12 @@ GET /api/v1/routing/safe-path?start_lng=106.70098&start_lat=10.77689&end_lng=106
 - `avoided.blocked_edge_ids`: đoạn bị loại vì ngập quá ngưỡng xe
 - `avoided.near_limit_edge_ids`: đoạn sát ngưỡng an toàn
 - `flood_sources`: thông tin nguồn ngập dùng trong tính route (sensor theo bán kính + crowd reports cấu hình theo env)
+
+### GPS / nhiều user (tránh “máy khác vẫn ra GPS máy dev”)
+
+- Geolocation là của **trình duyệt đang mở**; nếu sai user/máy → kiểm tra **localStorage không gắn `userId`**, hard-code demo, hoặc state Provider không reset khi logout/đổi account.
+- Đồng bộ server (theo JWT): `POST /api/auth/location` `{ lat, lng, accuracy_m? }` — lưu cho đúng user; `GET /api/auth/profile` trả `last_known_lat` / `last_known_lng` để prefill **user hiện tại**.
+- Chi tiết: `docs/fe-integration-update-full.md` mục **7.1**.
 
 ### FE cần làm
 
@@ -282,6 +290,7 @@ Auth: Admin JWT
 
 ## 6) Link tài liệu liên quan
 
+- `docs/fe-integration-update-full.md` — **cập nhật đầy đủ cho FE** (routing sensor/crowd, HTTP/`found`, Swagger, checklist)
 - `docs/report-chi-tiet-luong-moi-floodwatch.md`
 - `docs/roadmap-nghiep-vu-va-huong-dan-fe.md`
 - Swagger: `/api-docs`

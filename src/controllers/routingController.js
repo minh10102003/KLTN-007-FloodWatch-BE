@@ -33,7 +33,13 @@ const routingController = {
             });
             return res.json({ success: true, data });
         } catch (err) {
-            const status = /không tìm thấy|chưa có|không nằm trong đồ thị/i.test(err.message) ? 400 : 500;
+            // Detect Python service unavailable (503) vs validation errors (400) vs server errors (500)
+            let status = 500;
+            if (/không tìm thấy|chưa có|không nằm trong đồ thị|không hợp lệ/i.test(err.message)) {
+                status = 400;
+            } else if (/Graph chưa được load|service unavailable/i.test(err.message)) {
+                status = 503;
+            }
             return res.status(status).json({ success: false, error: err.message });
         }
     },

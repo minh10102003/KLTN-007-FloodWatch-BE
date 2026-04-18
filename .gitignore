@@ -22,3 +22,16 @@ Thumbs.db
 
 # Uploaded files (report images)
 uploads/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+.venv/
+venv/
+
+# ML models (trained locally, not committed)
+python_routing/ml/models/*.joblib
+python_routing/ml/models/*.onnx
+python_routing/ml/models/*.pkl

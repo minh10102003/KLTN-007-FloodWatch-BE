@@ -256,6 +256,8 @@ flowchart LR
 
 ## 8. Tài liệu liên quan trong repo
 
+- **Cập nhật đồng bộ FE (routing sensor/crowd, test, lỗi HTTP):** `docs/fe-integration-update-full.md`
+- **API doc User/Admin (endpoint nhanh):** `docs/api-doc-fe-user-admin-routing-notify.md`
 - **Báo cáo kỹ thuật chi tiết** (nghiệp vụ, cách hoạt động, MQTT→notify, phụ lục): `docs/report-chi-tiet-luong-moi-floodwatch.md`
 - Luồng chi tiết thông báo (MQTT, dedupe, Telegram per-user): `docs/group-c-notification-flow.md`
 - Gợi ý nhóm D cho FE: `docs/group-d-research-feature-fe-guide.md`

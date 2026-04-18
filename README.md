@@ -38,6 +38,7 @@ A comprehensive backend system for real-time flood monitoring, sensor data proce
 - 📈 **Data Analytics** - Historical data analysis and velocity calculations
 - 🎯 **Kalman Filtering** - Noise reduction for sensor data
 - 📖 **Swagger Documentation** - Interactive API documentation
+- 🗺️ **AMC-A* Routing** - Bidirectional A* flood-aware pathfinding (Python FastAPI microservice)
 
 ## 🛠️ Tech Stack
 
@@ -53,6 +54,11 @@ A comprehensive backend system for real-time flood monitoring, sensor data proce
 - **API Docs:** Swagger UI + Swagger JSDoc
 - **CORS:** Enabled for cross-origin requests
 
+### Python Routing Microservice
+- **Framework:** FastAPI + Uvicorn
+- **Database Client:** asyncpg (async PostgreSQL)
+- **ML:** scikit-learn, joblib (Phase 3)
+
 ### Development
 - **Environment:** dotenv
 - **Database Client:** pg (node-postgres)
@@ -64,6 +70,7 @@ Before you begin, ensure you have the following installed:
 - **Node.js** >= 14.0.0 ([Download](https://nodejs.org/))
 - **PostgreSQL** >= 12.0 ([Download](https://www.postgresql.org/download/))
 - **PostGIS Extension** (included with PostgreSQL Stack Builder)
+- **Python** >= 3.10 ([Download](https://www.python.org/downloads/)) — for routing microservice
 - **Git** (optional, for cloning)
 
 ## 🚀 Installation
@@ -171,13 +178,29 @@ npm run migrate
 
 ## 🎯 Usage
 
-### Start the server
+### Start Node.js server only
 
 ```bash
 npm start
 ```
 
 The server will start on `http://localhost:3000` (or your configured PORT).
+
+### Start with Python Routing Service (recommended)
+
+```bash
+# Install Python dependencies (first time)
+pip install -r python_routing/requirements.txt
+
+# Start both Node.js + Python service
+npm run start:all
+```
+
+This starts:
+- **Node.js** on port 3000 (main API)
+- **Python FastAPI** on port 8001 (routing engine)
+
+> If Python service is unavailable, Node.js automatically falls back to its built-in A* implementation.
 
 ### Verify installation
 
@@ -272,6 +295,14 @@ hcm-flood-backend/
 │   ├── createAdminUser.js    # Admin user creation script
 │   ├── runMigration.js       # Migration runner
 │   └── checkModerationStatus.js
+├── python_routing/           # Python FastAPI routing microservice
+│   ├── main.py              # FastAPI entry point
+│   ├── config.py            # .env reader (shared with Node.js)
+│   ├── db.py                # asyncpg connection pool
+│   ├── services/            # Graph loader, A*, flood penalty, path smoother
+│   ├── routers/             # API endpoints
+│   ├── ml/                  # ML flood prediction (Phase 3)
+│   └── tests/               # Unit tests
 ├── server.js                 # Server entry point
 ├── package.json
 ├── .env                      # Environment variables (not in git)
@@ -340,10 +371,13 @@ The database uses **PostGIS** for geospatial operations:
 
 | Command | Description |
 |---------|-------------|
-| `npm start` | Start the server |
+| `npm start` | Start Node.js server |
+| `npm run start:python` | Start Python routing service only |
+| `npm run start:all` | Start both Node.js + Python |
 | `npm run create-admin` | Create admin user |
 | `npm run migrate` | Run database migrations |
 | `npm run check-moderation` | Check moderation status |
+| `npm run train:flood-model` | Train ML flood prediction model |
 
 ## 🔧 Troubleshooting
 
@@ -419,11 +453,7 @@ This project is licensed under the ISC License.
 
 ---
 
-<<<<<<< HEAD
 **For detailed setup instructions in Vietnamese, see [HUONG_DAN_CAI_DAT_BACKEND.md](./HUONG_DAN_CAI_DAT_BACKEND.md)**
 
 **For complete API documentation, see [COMPLETE_BACKEND_GUIDE.md](./COMPLETE_BACKEND_GUIDE.md)**
-
-=======
->>>>>>> a9b2cfd0526322a48744cdecbbcb8f5dc9220391
 

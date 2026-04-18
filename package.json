@@ -29,7 +29,10 @@
     "import:road-graph": "node scripts/importRoadGraph.js",
     "map:road-sensors": "node scripts/mapRoadEdgesToSensors.js",
     "create-admin": "node scripts/createAdminUser.js",
-    "check-moderation": "node scripts/checkModerationStatus.js"
+    "check-moderation": "node scripts/checkModerationStatus.js",
+    "start:python": "cd python_routing && python main.py",
+    "start:all": "npx -y concurrently \"npm start\" \"npm run start:python\"",
+    "train:flood-model": "cd python_routing && python ml/train_flood_model.py"
   },
   "keywords": [],
   "author": "",

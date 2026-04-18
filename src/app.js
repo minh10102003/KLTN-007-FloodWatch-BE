@@ -45,7 +45,26 @@ swaggerSetup(app);
 // Ghi lượt truy cập mỗi request tới /api (để thống kê hàng tháng)
 app.use('/api', accessLogMiddleware);
 
-// Routes (đặt route cố định /api/audit-logs trước các route có tham số /:id để tránh bị sensorRoutes bắt nhầm)
+const { authenticate } = require('./middleware/auth');
+
+// ==========================================
+// 1. KHỐI PUBLIC (Không yêu cầu Token)
+// ==========================================
+app.use('/api/auth', authRoutes);
+app.use('/api', telegramRoutes); // Webhook không dùng JWT
+// uploadRoutes có thể chứa GET /api/uploads/:filename nếu có, nhưng thường upload tĩnh được phục vụ ở trên. 
+// Nếu upload cũng cần bảo mật (chỉ cho phép đăng ảnh khi đã đăng nhập) thì đẩy xuống dưới.
+// Tạm thời đưa uploadRoutes xuống Protected block vì hành động tải file lên nên cần xác thực.
+
+// ==========================================
+// 2. MIDDLEWARE XÁC THỰC TOÀN CỤC
+// ==========================================
+// Bất kỳ request nào đi qua dòng này mà không có token hợp lệ đều bị chặn (401)
+app.use('/api', authenticate);
+
+// ==========================================
+// 3. KHỐI PROTECTED (Yêu cầu Token)
+// ==========================================
 app.use('/api', floodRoutes);
 app.use('/api', fusionRoutes);
 app.use('/api', forecastRoutes);
@@ -53,12 +72,10 @@ app.use('/api', routingRoutes);
 app.use('/api', weatherRoutes);
 app.use('/api', deviceHealthRoutes);
 app.use('/api', emergencyAlertAdminRoutes);
-app.use('/api', telegramRoutes);
 app.use('/api', researchRoutes);
 app.use('/api', crowdReportRoutes);
 app.use('/api', auditLogRoutes);
 app.use('/api/sensors', sensorRoutes);
-app.use('/api/auth', authRoutes);
 app.use('/api/alerts', alertRoutes);
 app.use('/api/reports', reportModerationRoutes);
 app.use('/api/report-evaluations', reportEvaluationRoutes);

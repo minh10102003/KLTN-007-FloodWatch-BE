@@ -1,3 +1,12 @@
+/**
+ * routingService.js — Thin HTTP client that delegates routing to the Python FastAPI service.
+ *
+ * Falls back to legacy Node.js A* if Python service is unavailable.
+ */
+
+const PYTHON_ROUTING_URL = process.env.PYTHON_ROUTING_URL || 'http://localhost:8001';
+
+// ── Legacy A* (fallback) ─────────────────────────────────────────────────────
 const routingRepository = require('../repositories/routingRepository');
 
 const VEHICLE_PROFILES = {
@@ -236,144 +245,161 @@ function buildSegmentOutput(nodePath, nodePos, cameByEdge) {
     return { segments, totalLengthM, totalTimeSec };
 }
 
-const routingService = {
-    async findSafePath({ start_lng, start_lat, end_lng, end_lat, vehicle_type, nearest_node_max_m }) {
-        const vehicle = parseVehicleType(vehicle_type);
-        if (!vehicle) {
-            const allow = Object.keys(VEHICLE_PROFILES).join(', ');
-            throw new Error(`vehicle_type không hợp lệ. Cho phép: ${allow}`);
-        }
-        const startLng = toFiniteNumber(start_lng);
-        const startLat = toFiniteNumber(start_lat);
-        const endLng = toFiniteNumber(end_lng);
-        const endLat = toFiniteNumber(end_lat);
+// ── Legacy A* implementation (used as fallback) ──────────────────────────────
+async function findSafePathLegacy({ start_lng, start_lat, end_lng, end_lat, vehicle_type, nearest_node_max_m }) {
+    const vehicle = parseVehicleType(vehicle_type);
+    if (!vehicle) {
+        const allow = Object.keys(VEHICLE_PROFILES).join(', ');
+        throw new Error(`vehicle_type không hợp lệ. Cho phép: ${allow}`);
+    }
+    const startLng = toFiniteNumber(start_lng);
+    const startLat = toFiniteNumber(start_lat);
+    const endLng = toFiniteNumber(end_lng);
+    const endLat = toFiniteNumber(end_lat);
 
-        if (startLng == null || startLat == null || endLng == null || endLat == null) {
-            throw new Error('Tọa độ start/end không hợp lệ.');
-        }
+    if (startLng == null || startLat == null || endLng == null || endLat == null) {
+        throw new Error('Tọa độ start/end không hợp lệ.');
+    }
 
-        const maxNearest = parseIntInRange(
-            nearest_node_max_m ?? process.env.ROUTING_NEAREST_NODE_MAX_M,
-            1200,
-            150,
-            5000
-        );
+    const maxNearest = parseIntInRange(
+        nearest_node_max_m ?? process.env.ROUTING_NEAREST_NODE_MAX_M,
+        1200, 150, 5000
+    );
 
-        const crowdHours = parseIntInRange(
-            process.env.ROUTING_CROWD_REPORT_HOURS,
-            6,
-            1,
-            72
-        );
-        const crowdBufferM = parseIntInRange(
-            process.env.ROUTING_CROWD_EDGE_BUFFER_M,
-            35,
-            5,
-            200
-        );
-        const crowdHalfLifeHours = parseIntInRange(
-            process.env.ROUTING_CROWD_RECENCY_HALF_LIFE_HOURS,
-            2,
-            1,
-            24
-        );
-        const crowdMinReliability = parseIntInRange(
-            process.env.ROUTING_CROWD_MIN_RELIABILITY,
-            40,
-            0,
-            100
-        );
-        const crowdMaxBoost = parseFloatInRange(
-            process.env.ROUTING_CROWD_MAX_BOOST,
-            1.5,
-            1,
-            3
-        );
+    const crowdHours = parseIntInRange(process.env.ROUTING_CROWD_REPORT_HOURS, 6, 1, 72);
+    const crowdBufferM = parseIntInRange(process.env.ROUTING_CROWD_EDGE_BUFFER_M, 35, 5, 200);
+    const crowdHalfLifeHours = parseIntInRange(process.env.ROUTING_CROWD_RECENCY_HALF_LIFE_HOURS, 2, 1, 24);
+    const crowdMinReliability = parseIntInRange(process.env.ROUTING_CROWD_MIN_RELIABILITY, 40, 0, 100);
+    const crowdMaxBoost = parseFloatInRange(process.env.ROUTING_CROWD_MAX_BOOST, 1.5, 1, 3);
+    const sensorFloodRadiusM = parseIntInRange(process.env.ROUTING_SENSOR_FLOOD_RADIUS_M, 120, 30, 500);
+    const rawSensorDecay = String(process.env.ROUTING_SENSOR_FLOOD_DECAY || 'linear').trim().toLowerCase();
+    const sensorFloodDecay = rawSensorDecay === 'plateau' ? 'plateau' : 'linear';
 
-        const sensorFloodRadiusM = parseIntInRange(
-            process.env.ROUTING_SENSOR_FLOOD_RADIUS_M,
-            120,
-            30,
-            500
-        );
-        const rawSensorDecay = String(process.env.ROUTING_SENSOR_FLOOD_DECAY || 'linear').trim().toLowerCase();
-        const sensorFloodDecay = rawSensorDecay === 'plateau' ? 'plateau' : 'linear';
+    const [startNode, endNode, edges] = await Promise.all([
+        routingRepository.getNearestNode({ lng: startLng, lat: startLat, maxDistanceMeters: maxNearest }),
+        routingRepository.getNearestNode({ lng: endLng, lat: endLat, maxDistanceMeters: maxNearest }),
+        routingRepository.getActiveEdgesWithFloodDepth({
+            crowdHours, crowdBufferM, crowdHalfLifeHours,
+            crowdMinReliability, crowdMaxBoost, sensorFloodRadiusM, sensorFloodDecay
+        })
+    ]);
 
-        const [startNode, endNode, edges] = await Promise.all([
-            routingRepository.getNearestNode({ lng: startLng, lat: startLat, maxDistanceMeters: maxNearest }),
-            routingRepository.getNearestNode({ lng: endLng, lat: endLat, maxDistanceMeters: maxNearest }),
-            routingRepository.getActiveEdgesWithFloodDepth({
-                crowdHours,
-                crowdBufferM,
-                crowdHalfLifeHours,
-                crowdMinReliability,
-                crowdMaxBoost,
-                sensorFloodRadiusM,
-                sensorFloodDecay
-            })
-        ]);
+    if (!startNode || !endNode) {
+        throw new Error('Không tìm thấy road node gần điểm đầu/cuối. Cần nạp dữ liệu road_nodes.');
+    }
+    if (!edges.length) {
+        throw new Error('Chưa có road_edges. Hãy import mạng đường để chạy AMC-A*.');
+    }
 
-        if (!startNode || !endNode) {
-            throw new Error('Không tìm thấy road node gần điểm đầu/cuối. Cần nạp dữ liệu road_nodes.');
-        }
-        if (!edges.length) {
-            throw new Error('Chưa có road_edges. Hãy import mạng đường để chạy AMC-A*.');
-        }
+    const { adj, nodePos } = adjacencyFromEdges(edges);
+    const startNodeId = Number(startNode.id);
+    const endNodeId = Number(endNode.id);
+    if (!adj.has(startNodeId) || !adj.has(endNodeId)) {
+        throw new Error('Start/End node không nằm trong đồ thị đường đang active.');
+    }
 
-        const { adj, nodePos } = adjacencyFromEdges(edges);
-        const startNodeId = Number(startNode.id);
-        const endNodeId = Number(endNode.id);
-        if (!adj.has(startNodeId) || !adj.has(endNodeId)) {
-            throw new Error('Start/End node không nằm trong đồ thị đường đang active.');
-        }
+    const hasAnyFlood = edges.some((e) => Number(e.flood_depth_cm) > 0);
 
-        const hasAnyFlood = edges.some((e) => Number(e.flood_depth_cm) > 0);
+    const result = aStar({
+        startNodeId,
+        targetNodeId: endNodeId,
+        adj, nodePos, vehicle,
+        isDryNetwork: !hasAnyFlood
+    });
 
-        const result = aStar({
-            startNodeId,
-            targetNodeId: endNodeId,
-            adj,
-            nodePos,
-            vehicle,
-            isDryNetwork: !hasAnyFlood
-        });
-
-        if (!result) {
-            return {
-                found: false,
-                reason: 'Không tìm thấy đường đi an toàn (có thể tất cả nhánh bị ngập quá ngưỡng xe).',
-                vehicle,
-                start_node: startNode,
-                end_node: endNode
-            };
-        }
-
-        const { segments, totalLengthM, totalTimeSec } = buildSegmentOutput(result.nodePath, nodePos, result.cameByEdge);
+    if (!result) {
         return {
-            found: true,
-            vehicle,
-            flood_sources: {
-                crowd_report_hours: crowdHours,
-                crowd_edge_buffer_m: crowdBufferM,
-                crowd_recency_half_life_hours: crowdHalfLifeHours,
-                crowd_min_reliability: crowdMinReliability,
-                crowd_max_boost: crowdMaxBoost,
-                sensor_flood_radius_m: sensorFloodRadiusM,
-                sensor_flood_decay: sensorFloodDecay
-            },
-            start_node: startNode,
-            end_node: endNode,
-            node_path: result.nodePath,
-            route: {
-                total_cost_sec: Number(totalTimeSec.toFixed(2)),
-                total_distance_m: Number(totalLengthM.toFixed(2)),
-                segments
-            },
-            avoided: {
-                blocked_edge_ids: result.blockedEdgeIds,
-                near_limit_edge_ids: result.nearLimitEdgeIds
-            }
+            found: false,
+            reason: 'Không tìm thấy đường đi an toàn (có thể tất cả nhánh bị ngập quá ngưỡng xe).',
+            vehicle, start_node: startNode, end_node: endNode
         };
+    }
+
+    const { segments, totalLengthM, totalTimeSec } = buildSegmentOutput(result.nodePath, nodePos, result.cameByEdge);
+    return {
+        found: true, vehicle,
+        flood_sources: {
+            crowd_report_hours: crowdHours, crowd_edge_buffer_m: crowdBufferM,
+            crowd_recency_half_life_hours: crowdHalfLifeHours,
+            crowd_min_reliability: crowdMinReliability,
+            crowd_max_boost: crowdMaxBoost,
+            sensor_flood_radius_m: sensorFloodRadiusM,
+            sensor_flood_decay: sensorFloodDecay
+        },
+        start_node: startNode, end_node: endNode,
+        node_path: result.nodePath,
+        route: {
+            total_cost_sec: Number(totalTimeSec.toFixed(2)),
+            total_distance_m: Number(totalLengthM.toFixed(2)),
+            segments
+        },
+        avoided: {
+            blocked_edge_ids: result.blockedEdgeIds,
+            near_limit_edge_ids: result.nearLimitEdgeIds
+        }
+    };
+}
+
+// ── Python service health check ──────────────────────────────────────────────
+let _pythonServiceAvailable = null; // null = not checked, true/false
+let _lastHealthCheck = 0;
+const HEALTH_CHECK_INTERVAL_MS = 30_000; // re-check every 30s
+
+async function isPythonServiceAvailable() {
+    const now = Date.now();
+    if (_pythonServiceAvailable !== null && (now - _lastHealthCheck) < HEALTH_CHECK_INTERVAL_MS) {
+        return _pythonServiceAvailable;
+    }
+    try {
+        const response = await fetch(`${PYTHON_ROUTING_URL}/health`, {
+            signal: AbortSignal.timeout(3000)
+        });
+        _pythonServiceAvailable = response.ok;
+    } catch {
+        _pythonServiceAvailable = false;
+    }
+    _lastHealthCheck = now;
+    return _pythonServiceAvailable;
+}
+
+// ── Primary: call Python service via HTTP ────────────────────────────────────
+async function findSafePathViaPython({ start_lng, start_lat, end_lng, end_lat, vehicle_type, nearest_node_max_m }) {
+    const url = new URL('/api/v1/routing/safe-path', PYTHON_ROUTING_URL);
+    url.searchParams.set('start_lng', start_lng);
+    url.searchParams.set('start_lat', start_lat);
+    url.searchParams.set('end_lng', end_lng);
+    url.searchParams.set('end_lat', end_lat);
+    url.searchParams.set('vehicle_type', vehicle_type || 'motorbike');
+    if (nearest_node_max_m != null) {
+        url.searchParams.set('nearest_node_max_m', nearest_node_max_m);
+    }
+
+    const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.detail || body.error || `Python routing error: ${response.status}`);
+    }
+    const json = await response.json();
+    return json.data;
+}
+
+// ── Public API with fallback ─────────────────────────────────────────────────
+const routingService = {
+    async findSafePath(params) {
+        // Try Python service first
+        const pythonUp = await isPythonServiceAvailable();
+        if (pythonUp) {
+            try {
+                return await findSafePathViaPython(params);
+            } catch (err) {
+                console.warn('[routing] Python service failed, falling back to Node.js A*:', err.message);
+                // Reset cache so we re-check next time
+                _pythonServiceAvailable = null;
+            }
+        }
+
+        // Fallback to legacy Node.js A*
+        return findSafePathLegacy(params);
     }
 };
 
