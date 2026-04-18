@@ -28,6 +28,7 @@
     "migrate:road-graph": "node scripts/runMigrationRoadGraphTables.js",
     "import:road-graph": "node scripts/importRoadGraph.js",
     "map:road-sensors": "node scripts/mapRoadEdgesToSensors.js",
+    "map:reverse-geocode": "node scripts/updateSensorLocations.js",
     "create-admin": "node scripts/createAdminUser.js",
     "check-moderation": "node scripts/checkModerationStatus.js",
     "start:python": "cd python_routing && python main.py",
