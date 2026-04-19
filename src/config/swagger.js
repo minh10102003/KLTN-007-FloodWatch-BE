@@ -47,7 +47,7 @@ const options = {
                     scheme: 'bearer',
                     bearerFormat: 'JWT',
                     description:
-                        'JWT access từ login/register (hoặc /api/auth/refresh). Khi hết hạn, gọi POST /api/auth/refresh với refresh_token + session_token.'
+                        'JWT access (mặc định 30 phút, JWT_ACCESS_EXPIRES_IN) từ login hoặc POST /api/auth/refresh. Hết hạn access → refresh; hết refresh_expires_at → đăng nhập lại.'
                 }
             },
             schemas: {

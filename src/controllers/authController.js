@@ -79,7 +79,9 @@ const authController = {
                     access_token: result.access_token,
                     refresh_token: result.refresh_token,
                     session_token: result.session_token,
-                    token: result.token
+                    token: result.token,
+                    expires_in: result.expires_in,
+                    refresh_expires_at: result.refresh_expires_at
                 }
             });
         } catch (err) {
@@ -101,7 +103,14 @@ const authController = {
             res.json({
                 success: true,
                 message: 'Làm mới token thành công',
-                data: tokens
+                data: {
+                    access_token: tokens.access_token,
+                    refresh_token: tokens.refresh_token,
+                    session_token: tokens.session_token,
+                    token: tokens.token,
+                    expires_in: tokens.expires_in,
+                    refresh_expires_at: tokens.refresh_expires_at
+                }
             });
         } catch (err) {
             res.status(401).json({

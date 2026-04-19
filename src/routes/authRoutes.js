@@ -85,7 +85,8 @@ router.post('/register', authController.register);
  *       - Username: `user123`
  *       - Password: `password123`
  *       
- *       Trả về **access_token** (JWT ngắn hạn), **refresh_token** và **session_token** (UUID phiên).
+ *       Trả về **access_token** (JWT, mặc định **30 phút** qua `JWT_ACCESS_EXPIRES_IN`), **refresh_token**, **session_token** (UUID phiên),
+ *       **expires_in** (giây), **refresh_expires_at** (ISO — hết phiên refresh thì phải đăng nhập lại).
  *       Gửi access_token qua header `Authorization: Bearer <access_token>`. Khi 401 do hết hạn access, gọi `POST /api/auth/refresh`.
  *     requestBody:
  *       required: true
@@ -147,6 +148,14 @@ router.post('/register', authController.register);
  *                       type: string
  *                       description: Alias access_token
  *                       example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+ *                     expires_in:
+ *                       type: integer
+ *                       description: Thời hạn access token (giây), khớp JWT
+ *                       example: 1800
+ *                     refresh_expires_at:
+ *                       type: string
+ *                       format: date-time
+ *                       description: Thời điểm hết hạn phiên refresh (sau đó bắt buộc đăng nhập lại)
  *             examples:
  *               admin:
  *                 summary: Response khi đăng nhập Admin
@@ -281,6 +290,8 @@ router.post('/verify-otp', authController.verifyOtp);
  *                     refresh_token: { type: string }
  *                     session_token: { type: string, format: uuid }
  *                     token: { type: string, description: alias access_token }
+ *                     expires_in: { type: integer, description: Thời hạn access token (giây) }
+ *                     refresh_expires_at: { type: string, format: date-time }
  *       401:
  *         description: Refresh/session không hợp lệ hoặc hết hạn
  */

@@ -6,6 +6,7 @@ const otpService = require('../services/otpService');
 const bcrypt = require('bcrypt');
 const {
     getRefreshExpiresMs,
+    getAccessExpiresInSeconds,
     hashRefreshToken,
     generateRefreshToken,
     signAccessToken,
@@ -28,11 +29,14 @@ const userModel = {
             role: user.role,
             sid: session.id
         });
+        const expires_in = getAccessExpiresInSeconds();
         return {
             access_token,
             refresh_token: refreshToken,
             session_token: session.id,
-            token: access_token
+            token: access_token,
+            expires_in,
+            refresh_expires_at: expiresAt.toISOString()
         };
     },
 
@@ -186,11 +190,14 @@ const userModel = {
             role: user.role,
             sid: sessionToken
         });
+        const expires_in = getAccessExpiresInSeconds();
         return {
             access_token,
             refresh_token: newRefresh,
             session_token: sessionToken,
-            token: access_token
+            token: access_token,
+            expires_in,
+            refresh_expires_at: expiresAt.toISOString()
         };
     },
 
