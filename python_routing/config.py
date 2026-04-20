@@ -34,6 +34,13 @@ def _str(key: str, default: str) -> str:
     return os.getenv(key, default)
 
 
+def _bool(key: str, default: bool) -> bool:
+    raw = os.getenv(key)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 # ── Database ──────────────────────────────────────────────────────────────────
 DB_HOST = _str("DB_HOST", "localhost")
 DB_PORT = _int("DB_PORT", 5432)
@@ -57,6 +64,10 @@ ROUTING_CROWD_MIN_RELIABILITY = _int("ROUTING_CROWD_MIN_RELIABILITY", 40)
 ROUTING_CROWD_MAX_BOOST = _float("ROUTING_CROWD_MAX_BOOST", 1.5)
 ROUTING_SENSOR_FLOOD_RADIUS_M = _int("ROUTING_SENSOR_FLOOD_RADIUS_M", 120)
 ROUTING_SENSOR_FLOOD_DECAY = _str("ROUTING_SENSOR_FLOOD_DECAY", "linear").strip().lower()
+ROUTING_UTURN_PENALTY_SEC = _float("ROUTING_UTURN_PENALTY_SEC", 45.0)
+ROUTING_UTURN_PENALTY_M = _float("ROUTING_UTURN_PENALTY_M", 120.0)
+ROUTING_TRAFFIC_DEBUG_ENABLED = _bool("ROUTING_TRAFFIC_DEBUG_ENABLED", False)
+ROUTING_TRAFFIC_DEBUG_POINTS = _str("ROUTING_TRAFFIC_DEBUG_POINTS", "")
 
 # ── ML Model ──────────────────────────────────────────────────────────────────
 ML_MODEL_PATH = _str(

@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import math
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -21,6 +22,8 @@ from config import (
     ROUTING_CROWD_MAX_BOOST,
     ROUTING_SENSOR_FLOOD_RADIUS_M,
     ROUTING_SENSOR_FLOOD_DECAY,
+    ROUTING_TRAFFIC_DEBUG_ENABLED,
+    ROUTING_TRAFFIC_DEBUG_POINTS,
 )
 
 logger = logging.getLogger("graph_loader")
@@ -36,6 +39,13 @@ class Edge:
     speed_limit_mps: float
     flood_depth_cm: float
     is_bidirectional: bool
+    oneway: str | None = None
+    highway: str | None = None
+    junction: str | None = None
+    motorcar_allowed: bool = True
+    motorcycle_allowed: bool = True
+    is_roundabout: bool = False
+    source_is_reverse: bool = False
 
 
 @dataclass(slots=True)
@@ -64,7 +74,7 @@ class GraphSnapshot:
 
 # ── SQL (mirrors routingRepository.js exactly) ────────────────────────────────
 
-_EDGES_SQL = """
+_EDGES_SQL_TEMPLATE = """
 WITH crowd_recent AS (
     SELECT
         location,
@@ -112,6 +122,7 @@ SELECT
     e.length_m,
     e.speed_limit_mps,
     e.is_bidirectional,
+    {traffic_select_sql}
     ST_X(fn.location::geometry) AS from_lng,
     ST_Y(fn.location::geometry) AS from_lat,
     ST_X(tn.location::geometry) AS to_lng,
@@ -159,6 +170,13 @@ LEFT JOIN crowd_edge ce ON ce.edge_id = e.id
 WHERE e.is_active = TRUE
 """
 
+_EDGE_COLUMNS_SQL = """
+SELECT column_name
+FROM information_schema.columns
+WHERE table_schema = ANY (current_schemas(false))
+  AND table_name = 'road_edges'
+"""
+
 _NEAREST_NODE_SQL = """
 SELECT
     id,
@@ -190,6 +208,51 @@ class GraphCache:
     def __init__(self) -> None:
         self._snapshot: Optional[GraphSnapshot] = None
         self._lock = asyncio.Lock()
+        self._edge_columns: set[str] | None = None
+
+    async def _load_edge_columns(self) -> set[str]:
+        if self._edge_columns is not None:
+            return self._edge_columns
+        rows = await fetch_all(_EDGE_COLUMNS_SQL)
+        self._edge_columns = {str(r["column_name"]) for r in rows}
+        return self._edge_columns
+
+    async def _build_edges_sql(self) -> str:
+        cols = await self._load_edge_columns()
+        oneway_sql = "NULL::text AS oneway"
+        if "oneway" in cols:
+            oneway_sql = "NULLIF(TRIM(e.oneway::text), '') AS oneway"
+        elif "osm_tags" in cols:
+            oneway_sql = "NULLIF(TRIM(e.osm_tags->>'oneway'), '') AS oneway"
+
+        highway_sql = "NULL::text AS highway"
+        if "highway" in cols:
+            highway_sql = "NULLIF(TRIM(e.highway::text), '') AS highway"
+        elif "osm_tags" in cols:
+            highway_sql = "NULLIF(TRIM(e.osm_tags->>'highway'), '') AS highway"
+
+        junction_sql = "NULL::text AS junction"
+        if "junction" in cols:
+            junction_sql = "NULLIF(TRIM(e.junction::text), '') AS junction"
+        elif "osm_tags" in cols:
+            junction_sql = "NULLIF(TRIM(e.osm_tags->>'junction'), '') AS junction"
+
+        motorcar_sql = "NULL::text AS motorcar"
+        if "motorcar" in cols:
+            motorcar_sql = "NULLIF(TRIM(e.motorcar::text), '') AS motorcar"
+        elif "osm_tags" in cols:
+            motorcar_sql = "NULLIF(TRIM(e.osm_tags->>'motorcar'), '') AS motorcar"
+
+        motorcycle_sql = "NULL::text AS motorcycle"
+        if "motorcycle" in cols:
+            motorcycle_sql = "NULLIF(TRIM(e.motorcycle::text), '') AS motorcycle"
+        elif "osm_tags" in cols:
+            motorcycle_sql = "NULLIF(TRIM(e.osm_tags->>'motorcycle'), '') AS motorcycle"
+
+        traffic_select_sql = ",\n    ".join(
+            [oneway_sql, highway_sql, junction_sql, motorcar_sql, motorcycle_sql]
+        )
+        return _EDGES_SQL_TEMPLATE.format(traffic_select_sql=traffic_select_sql)
 
     @property
     def snapshot(self) -> GraphSnapshot | None:
@@ -197,8 +260,9 @@ class GraphCache:
 
     async def refresh(self) -> GraphSnapshot:
         """Query DB and atomically swap the graph snapshot."""
+        edges_sql = await self._build_edges_sql()
         rows = await fetch_all(
-            _EDGES_SQL,
+            edges_sql,
             ROUTING_CROWD_REPORT_HOURS,
             ROUTING_CROWD_EDGE_BUFFER_M,
             ROUTING_CROWD_RECENCY_HALF_LIFE_HOURS,
@@ -249,6 +313,15 @@ class GraphCache:
             speed = _safe_float(row["speed_limit_mps"])
             db_flood = _safe_float(row["flood_depth_cm"]) or 0.0
             is_bidir = bool(row["is_bidirectional"])
+            oneway = _normalize_text(row.get("oneway"))
+            highway = _normalize_text(row.get("highway"))
+            junction = _normalize_text(row.get("junction"))
+            motorcar_allowed = _tag_allows_vehicle(row.get("motorcar"))
+            motorcycle_allowed = _tag_allows_vehicle(row.get("motorcycle"))
+            is_roundabout = junction == "roundabout"
+            if is_roundabout and oneway is None:
+                # Default OSM semantics for roundabout: enforce one-way direction.
+                oneway = "yes"
             
             # Apply ML prediction (take the max of deterministic and ML)
             edge_id = int(row["id"])
@@ -271,54 +344,51 @@ class GraphCache:
             if to_id not in snap.node_pos:
                 snap.node_pos[to_id] = NodePos(to_lng, to_lat)
 
-            # Forward edge
-            edge_forward = Edge(
-                edge_id=int(row["id"]),
-                to_node=to_id,
-                from_node=from_id,
-                length_m=length_m,
-                speed_limit_mps=speed,
-                flood_depth_cm=flood,
-                is_bidirectional=is_bidir,
-            )
-            snap.adj_forward.setdefault(from_id, []).append(edge_forward)
-            snap.all_edges.append(edge_forward)
+            forward_allowed = _allows_forward(oneway)
+            reverse_allowed = _allows_reverse(oneway, is_bidir)
+            edge_id = int(row["id"])
 
-            # Backward edge (for bidirectional A*)
-            edge_backward = Edge(
-                edge_id=int(row["id"]),
-                to_node=from_id,
-                from_node=to_id,
-                length_m=length_m,
-                speed_limit_mps=speed,
-                flood_depth_cm=flood,
-                is_bidirectional=is_bidir,
-            )
-            snap.adj_backward.setdefault(to_id, []).append(edge_backward)
-
-            # If the road is bidirectional, add reverse to forward too
-            if is_bidir:
-                edge_reverse = Edge(
-                    edge_id=int(row["id"]),
-                    to_node=from_id,
-                    from_node=to_id,
-                    length_m=length_m,
-                    speed_limit_mps=speed,
-                    flood_depth_cm=flood,
-                    is_bidirectional=is_bidir,
+            if forward_allowed:
+                _add_directed_edge(
+                    snap=snap,
+                    edge=Edge(
+                        edge_id=edge_id,
+                        to_node=to_id,
+                        from_node=from_id,
+                        length_m=length_m,
+                        speed_limit_mps=speed,
+                        flood_depth_cm=flood,
+                        is_bidirectional=is_bidir,
+                        oneway=oneway,
+                        highway=highway,
+                        junction=junction,
+                        motorcar_allowed=motorcar_allowed,
+                        motorcycle_allowed=motorcycle_allowed,
+                        is_roundabout=is_roundabout,
+                        source_is_reverse=False,
+                    ),
                 )
-                snap.adj_forward.setdefault(to_id, []).append(edge_reverse)
 
-                edge_reverse_back = Edge(
-                    edge_id=int(row["id"]),
-                    to_node=to_id,
-                    from_node=from_id,
-                    length_m=length_m,
-                    speed_limit_mps=speed,
-                    flood_depth_cm=flood,
-                    is_bidirectional=is_bidir,
+            if reverse_allowed:
+                _add_directed_edge(
+                    snap=snap,
+                    edge=Edge(
+                        edge_id=edge_id,
+                        to_node=from_id,
+                        from_node=to_id,
+                        length_m=length_m,
+                        speed_limit_mps=speed,
+                        flood_depth_cm=flood,
+                        is_bidirectional=is_bidir,
+                        oneway=oneway,
+                        highway=highway,
+                        junction=junction,
+                        motorcar_allowed=motorcar_allowed,
+                        motorcycle_allowed=motorcycle_allowed,
+                        is_roundabout=is_roundabout,
+                        source_is_reverse=True,
+                    ),
                 )
-                snap.adj_backward.setdefault(from_id, []).append(edge_reverse_back)
 
         snap.has_any_flood = has_flood
         snap.node_count = len(snap.node_pos)
@@ -334,6 +404,7 @@ class GraphCache:
             snap.edge_count,
             has_flood,
         )
+        _debug_log_traffic_points(snap)
         return snap
 
     async def get_nearest_node(
@@ -393,6 +464,116 @@ def _safe_float(val) -> float | None:
         return f if math.isfinite(f) else None
     except (ValueError, TypeError):
         return None
+
+
+def _normalize_text(val) -> str | None:
+    if val is None:
+        return None
+    raw = str(val).strip().lower()
+    return raw or None
+
+
+def _tag_allows_vehicle(val) -> bool:
+    tag = _normalize_text(val)
+    if tag in {None, "", "yes", "designated", "permissive", "unknown"}:
+        return True
+    if tag in {"1", "true"}:
+        return True
+    if tag in {"no", "0", "false", "private", "restricted"}:
+        return False
+    return True
+
+
+def _allows_forward(oneway: str | None) -> bool:
+    if oneway in {"yes", "1", "true"}:
+        return True
+    if oneway == "-1":
+        return False
+    return True
+
+
+def _allows_reverse(oneway: str | None, is_bidir: bool) -> bool:
+    if oneway in {"yes", "1", "true"}:
+        return False
+    if oneway == "-1":
+        return True
+    if oneway in {"no", "0", "false"}:
+        return True
+    return is_bidir
+
+
+def _add_directed_edge(snap: GraphSnapshot, edge: Edge) -> None:
+    snap.adj_forward.setdefault(edge.from_node, []).append(edge)
+    snap.all_edges.append(edge)
+    snap.adj_backward.setdefault(edge.to_node, []).append(
+        Edge(
+            edge_id=edge.edge_id,
+            to_node=edge.from_node,
+            from_node=edge.to_node,
+            length_m=edge.length_m,
+            speed_limit_mps=edge.speed_limit_mps,
+            flood_depth_cm=edge.flood_depth_cm,
+            is_bidirectional=edge.is_bidirectional,
+            oneway=edge.oneway,
+            highway=edge.highway,
+            junction=edge.junction,
+            motorcar_allowed=edge.motorcar_allowed,
+            motorcycle_allowed=edge.motorcycle_allowed,
+            is_roundabout=edge.is_roundabout,
+            source_is_reverse=not edge.source_is_reverse,
+        )
+    )
+
+
+def _parse_debug_points(raw: str) -> list[tuple[float, float]]:
+    points: list[tuple[float, float]] = []
+    if not raw.strip():
+        return points
+    for chunk in raw.split(";"):
+        pair = re.split(r"[,\s]+", chunk.strip())
+        if len(pair) != 2:
+            continue
+        lng = _safe_float(pair[0])
+        lat = _safe_float(pair[1])
+        if lng is None or lat is None:
+            continue
+        points.append((lng, lat))
+    return points
+
+
+def _debug_log_traffic_points(snap: GraphSnapshot) -> None:
+    if not ROUTING_TRAFFIC_DEBUG_ENABLED:
+        return
+    for lng, lat in _parse_debug_points(ROUTING_TRAFFIC_DEBUG_POINTS):
+        nearest_id = None
+        nearest_dist = float("inf")
+        for node_id, pos in snap.node_pos.items():
+            dist = _haversine_meters(lng, lat, pos.lng, pos.lat)
+            if dist < nearest_dist:
+                nearest_id = node_id
+                nearest_dist = dist
+        if nearest_id is None:
+            continue
+        edges = snap.adj_forward.get(nearest_id, [])
+        logger.info(
+            "Traffic debug node=%s dist_m=%.1f outgoing=%d",
+            nearest_id,
+            nearest_dist,
+            len(edges),
+        )
+        for edge in edges[:8]:
+            logger.info(
+                "  edge=%s %s->%s oneway=%s highway=%s junction=%s motorcar=%s motorcycle=%s reverse=%s",
+                edge.edge_id,
+                edge.from_node,
+                edge.to_node,
+                edge.oneway,
+                edge.highway,
+                edge.junction,
+                edge.motorcar_allowed,
+                edge.motorcycle_allowed,
+                edge.source_is_reverse,
+            )
 
 
 def _haversine_meters(lng1: float, lat1: float, lng2: float, lat2: float) -> float:

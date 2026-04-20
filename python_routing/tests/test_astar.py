@@ -178,6 +178,49 @@ def test_dry_network_mode():
     assert result.total_cost == 100  # cost = distance in meters
 
 
+def test_oneway_reverse_is_blocked():
+    """If edge is one-way, reverse traversal should not be possible."""
+    snap = GraphSnapshot()
+    e = Edge(
+        edge_id=1,
+        from_node=1,
+        to_node=2,
+        length_m=100,
+        speed_limit_mps=8.33,
+        flood_depth_cm=0,
+        is_bidirectional=False,
+        oneway="yes",
+    )
+    snap.adj_forward.setdefault(1, []).append(e)
+    snap.adj_backward.setdefault(2, []).append(
+        Edge(
+            edge_id=1,
+            from_node=2,
+            to_node=1,
+            length_m=100,
+            speed_limit_mps=8.33,
+            flood_depth_cm=0,
+            is_bidirectional=False,
+            oneway="yes",
+        )
+    )
+    snap.node_pos[1] = NodePos(lng=106.701, lat=10.801)
+    snap.node_pos[2] = NodePos(lng=106.702, lat=10.802)
+
+    assert find_path(snap, 2, 1, MOTORBIKE, is_dry=True) is None
+
+
+def test_motorway_blocked_for_motorbike():
+    """Motorbike should not route into motorway edges."""
+    snap = _make_snapshot([
+        {"id": 1, "from": 1, "to": 2, "length_m": 100},
+    ])
+    snap.adj_forward[1][0].highway = "motorway"
+    snap.adj_backward[2][0].highway = "motorway"
+
+    assert find_path(snap, 1, 2, MOTORBIKE, is_dry=True) is None
+
+
 if __name__ == "__main__":
     test_simple_two_node_path()
     print("[PASS] test_simple_two_node_path")
@@ -199,5 +242,11 @@ if __name__ == "__main__":
 
     test_dry_network_mode()
     print("[PASS] test_dry_network_mode")
+
+    test_oneway_reverse_is_blocked()
+    print("[PASS] test_oneway_reverse_is_blocked")
+
+    test_motorway_blocked_for_motorbike()
+    print("[PASS] test_motorway_blocked_for_motorbike")
 
     print("\nAll A* tests passed!")

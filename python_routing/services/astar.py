@@ -16,6 +16,7 @@ from typing import Optional
 
 from services.graph_loader import GraphSnapshot, NodePos, Edge
 from services.flood_penalty import VehicleProfile, compute_edge_cost
+from config import ROUTING_UTURN_PENALTY_M, ROUTING_UTURN_PENALTY_SEC
 
 
 # ── Result types ──────────────────────────────────────────────────────────────
@@ -41,6 +42,26 @@ def _haversine_meters(a: NodePos, b: NodePos) -> float:
         + math.cos(to_rad(a.lat)) * math.cos(to_rad(b.lat)) * math.sin(d_lng / 2) ** 2
     )
     return 2 * R * math.asin(math.sqrt(h))
+
+
+def _edge_allowed_for_vehicle(edge: Edge, vehicle: VehicleProfile) -> bool:
+    if vehicle.key in {"car", "suv"} and not edge.motorcar_allowed:
+        return False
+    if vehicle.key == "motorbike":
+        if not edge.motorcycle_allowed:
+            return False
+        if (edge.highway or "").startswith("motorway"):
+            return False
+    return True
+
+
+def _uturn_penalty(previous: Edge | None, candidate: Edge, is_dry: bool) -> float:
+    if previous is None:
+        return 0.0
+    # Immediate reversal to previous node is treated as U-turn and penalized.
+    if previous.from_node == candidate.to_node:
+        return ROUTING_UTURN_PENALTY_M if is_dry else ROUTING_UTURN_PENALTY_SEC
+    return 0.0
 
 
 # ── Unidirectional A* (fallback, simpler) ────────────────────────────────────
@@ -117,6 +138,9 @@ def unidirectional_astar(
         for edge in adj.get(current, []):
             if edge.to_node in closed:
                 continue
+            if not _edge_allowed_for_vehicle(edge, vehicle):
+                blocked_edges.add(edge.edge_id)
+                continue
 
             cost, is_blocked, is_near_limit = compute_edge_cost(
                 edge.length_m,
@@ -132,7 +156,8 @@ def unidirectional_astar(
             if is_near_limit:
                 near_limit_edges.add(edge.edge_id)
 
-            tentative_g = g_score[current] + cost
+            prev_edge = came_by_edge.get(current)
+            tentative_g = g_score[current] + cost + _uturn_penalty(prev_edge, edge, is_dry)
             if tentative_g < g_score.get(edge.to_node, math.inf):
                 g_score[edge.to_node] = tentative_g
                 came_from[edge.to_node] = current
@@ -242,6 +267,9 @@ def bidirectional_astar(
         for edge in adj_fwd.get(current, []):
             if edge.to_node in closed_fwd:
                 continue
+            if not _edge_allowed_for_vehicle(edge, vehicle):
+                blocked_edges.add(edge.edge_id)
+                continue
 
             cost, is_blocked, is_near_limit = compute_edge_cost(
                 edge.length_m, edge.speed_limit_mps, edge.flood_depth_cm,
@@ -253,7 +281,8 @@ def bidirectional_astar(
             if is_near_limit:
                 near_limit_edges.add(edge.edge_id)
 
-            tentative = g_fwd[current] + cost
+            prev_edge = came_by_edge_fwd.get(current)
+            tentative = g_fwd[current] + cost + _uturn_penalty(prev_edge, edge, is_dry)
             if tentative < g_fwd.get(edge.to_node, math.inf):
                 g_fwd[edge.to_node] = tentative
                 came_from_fwd[edge.to_node] = current
@@ -286,6 +315,9 @@ def bidirectional_astar(
         for edge in adj_bwd.get(current, []):
             if edge.to_node in closed_bwd:
                 continue
+            if not _edge_allowed_for_vehicle(edge, vehicle):
+                blocked_edges.add(edge.edge_id)
+                continue
 
             cost, is_blocked, is_near_limit = compute_edge_cost(
                 edge.length_m, edge.speed_limit_mps, edge.flood_depth_cm,
@@ -297,7 +329,8 @@ def bidirectional_astar(
             if is_near_limit:
                 near_limit_edges.add(edge.edge_id)
 
-            tentative = g_bwd[current] + cost
+            prev_edge = came_by_edge_bwd.get(current)
+            tentative = g_bwd[current] + cost + _uturn_penalty(prev_edge, edge, is_dry)
             if tentative < g_bwd.get(edge.to_node, math.inf):
                 g_bwd[edge.to_node] = tentative
                 came_from_bwd[edge.to_node] = current
