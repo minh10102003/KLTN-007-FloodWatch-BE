@@ -61,20 +61,17 @@ async def safe_path(
             detail="Graph chưa được load. Vui lòng đợi hoặc kiểm tra DB.",
         )
 
-    # ── Find nearest nodes ────────────────────────────────────────────────
-    start_node = await graph_cache.get_nearest_node(start_lng, start_lat, max_nearest)
-    end_node = await graph_cache.get_nearest_node(end_lng, end_lat, max_nearest)
+    # ── Find candidate nodes (avoid snapping to wrong carriageway) ───────
+    start_candidates = await graph_cache.get_nearest_nodes(start_lng, start_lat, max_nearest, limit=6)
+    end_candidates = await graph_cache.get_nearest_nodes(end_lng, end_lat, max_nearest, limit=6)
 
-    if not start_node or not end_node:
+    if not start_candidates or not end_candidates:
         raise HTTPException(
             status_code=400,
             detail="Không tìm thấy road node gần điểm đầu/cuối. Cần nạp dữ liệu road_nodes.",
         )
 
-    start_id = start_node["id"]
-    end_id = end_node["id"]
-
-    if start_id not in snap.adj_forward or end_id not in snap.adj_forward:
+    if all(c["id"] not in snap.adj_forward for c in start_candidates) or all(c["id"] not in snap.adj_forward for c in end_candidates):
         raise HTTPException(
             status_code=400,
             detail="Start/End node không nằm trong đồ thị đường đang active.",
@@ -83,13 +80,40 @@ async def safe_path(
     # ── Run A* ────────────────────────────────────────────────────────────
     is_dry = not snap.has_any_flood
 
-    result = find_path(
-        snap=snap,
-        start_id=start_id,
-        end_id=end_id,
-        vehicle=vehicle,
-        is_dry=is_dry,
-    )
+    best_result = None
+    best_start = None
+    best_end = None
+
+    # Evaluate multiple snap combinations, then pick minimum total score
+    # (path cost + tiny snap penalty). This reduces wrong-way routes caused
+    # by choosing a nearest node on the opposite carriageway.
+    for s in start_candidates:
+        s_id = s["id"]
+        if s_id not in snap.adj_forward:
+            continue
+        for e in end_candidates:
+            e_id = e["id"]
+            if e_id not in snap.adj_forward:
+                continue
+            r = find_path(
+                snap=snap,
+                start_id=s_id,
+                end_id=e_id,
+                vehicle=vehicle,
+                is_dry=is_dry,
+            )
+            if r is None:
+                continue
+            snap_penalty = float(s["distance_m"]) + float(e["distance_m"])
+            score = r.total_cost + snap_penalty
+            if best_result is None or score < (best_result.total_cost + float(best_start["distance_m"]) + float(best_end["distance_m"])):
+                best_result = r
+                best_start = s
+                best_end = e
+
+    result = best_result
+    start_node = best_start or start_candidates[0]
+    end_node = best_end or end_candidates[0]
 
     # ── ML prediction info (optional) ─────────────────────────────────────
     ml_info = flood_predictor.get_prediction_info()

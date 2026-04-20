@@ -196,6 +196,25 @@ ORDER BY distance_m ASC
 LIMIT 1
 """
 
+_NEAREST_NODES_SQL = """
+SELECT
+    id,
+    ST_X(location::geometry) AS lng,
+    ST_Y(location::geometry) AS lat,
+    ST_Distance(
+        location,
+        ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography
+    ) AS distance_m
+FROM road_nodes
+WHERE ST_DWithin(
+    location,
+    ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography,
+    $3
+)
+ORDER BY distance_m ASC
+LIMIT $4
+"""
+
 
 # ── GraphCache ────────────────────────────────────────────────────────────────
 
@@ -423,6 +442,20 @@ class GraphCache:
             "lat": float(row["lat"]),
             "distance_m": round(float(row["distance_m"]), 2),
         }
+
+    async def get_nearest_nodes(
+        self, lng: float, lat: float, max_dist_m: float, limit: int = 6
+    ) -> list[dict]:
+        rows = await fetch_all(_NEAREST_NODES_SQL, lng, lat, max_dist_m, max(1, min(limit, 20)))
+        return [
+            {
+                "id": int(r["id"]),
+                "lng": float(r["lng"]),
+                "lat": float(r["lat"]),
+                "distance_m": round(float(r["distance_m"]), 2),
+            }
+            for r in rows
+        ]
 
     def get_nearest_node_inmemory(
         self, lng: float, lat: float, max_dist_m: float

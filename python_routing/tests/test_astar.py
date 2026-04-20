@@ -221,6 +221,39 @@ def test_motorway_blocked_for_motorbike():
     assert find_path(snap, 1, 2, MOTORBIKE, is_dry=True) is None
 
 
+def test_oneway_negative_direction_only_reverse_allowed():
+    """oneway=-1 means only reverse traversal is legal."""
+    snap = GraphSnapshot()
+    edge = Edge(
+        edge_id=10,
+        from_node=2,
+        to_node=1,
+        length_m=80,
+        speed_limit_mps=8.33,
+        flood_depth_cm=0,
+        is_bidirectional=False,
+        oneway="-1",
+    )
+    snap.adj_forward.setdefault(2, []).append(edge)
+    snap.adj_backward.setdefault(1, []).append(
+        Edge(
+            edge_id=10,
+            from_node=1,
+            to_node=2,
+            length_m=80,
+            speed_limit_mps=8.33,
+            flood_depth_cm=0,
+            is_bidirectional=False,
+            oneway="-1",
+        )
+    )
+    snap.node_pos[1] = NodePos(lng=106.701, lat=10.801)
+    snap.node_pos[2] = NodePos(lng=106.702, lat=10.802)
+
+    assert find_path(snap, 1, 2, MOTORBIKE, is_dry=True) is None
+    assert find_path(snap, 2, 1, MOTORBIKE, is_dry=True) is not None
+
+
 if __name__ == "__main__":
     test_simple_two_node_path()
     print("[PASS] test_simple_two_node_path")
@@ -248,5 +281,8 @@ if __name__ == "__main__":
 
     test_motorway_blocked_for_motorbike()
     print("[PASS] test_motorway_blocked_for_motorbike")
+
+    test_oneway_negative_direction_only_reverse_allowed()
+    print("[PASS] test_oneway_negative_direction_only_reverse_allowed")
 
     print("\nAll A* tests passed!")
