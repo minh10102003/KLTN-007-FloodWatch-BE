@@ -121,6 +121,25 @@ function toMps(kmh) {
     return Math.max(1, Number(kmh) / 3.6);
 }
 
+function parseOtherTags(raw) {
+    const tags = {};
+    if (!raw || typeof raw !== 'string') return tags;
+    const re = /"([^"]+)"=>"([^"]*)"/g;
+    let m;
+    while ((m = re.exec(raw))) {
+        tags[String(m[1]).trim()] = String(m[2]).trim();
+    }
+    return tags;
+}
+
+function pickTag(tags, ...keys) {
+    for (const k of keys) {
+        const v = tags[k];
+        if (v != null && String(v).trim() !== '') return String(v).trim();
+    }
+    return null;
+}
+
 function nodeKey(lng, lat) {
     return `${Number(lng).toFixed(7)},${Number(lat).toFixed(7)}`;
 }
@@ -146,11 +165,19 @@ function parseGeoJson(content, defaultSpeedKmh) {
         const geom = f?.geometry;
         if (!geom) continue;
         const props = f.properties || {};
+        const otherTags = parseOtherTags(props.other_tags);
         const speedKmh = parseMaxspeedToKmh(
-            props.maxspeed,
+            props.maxspeed || pickTag(otherTags, 'maxspeed'),
             speedFromHighway(props.highway || props.road_type, defaultSpeedKmh)
         );
-        const bidirectional = String(props.oneway || '').toLowerCase() !== 'yes';
+        const oneway = String(props.oneway || pickTag(otherTags, 'oneway') || '').toLowerCase() || null;
+        const bidirectional = !['yes', '1', 'true', '-1'].includes(oneway);
+        const motorcar = pickTag(otherTags, 'motorcar', 'motor_vehicle');
+        const motorcycle = pickTag(otherTags, 'motorcycle');
+        const junction = pickTag(otherTags, 'junction');
+        const highway = props.highway || props.road_type || pickTag(otherTags, 'highway');
+        const osmId = props.osm_id != null ? String(props.osm_id) : null;
+
         const pushLine = (coords) => {
             if (!Array.isArray(coords) || coords.length < 2) return;
             for (let i = 1; i < coords.length; i++) {
@@ -161,7 +188,14 @@ function parseGeoJson(content, defaultSpeedKmh) {
                     from: { lng: Number(lng1), lat: Number(lat1) },
                     to: { lng: Number(lng2), lat: Number(lat2) },
                     speedLimitMps: toMps(speedKmh),
-                    isBidirectional: bidirectional
+                    isBidirectional: bidirectional,
+                    oneway,
+                    highway,
+                    junction,
+                    motorcar,
+                    motorcycle,
+                    osmId,
+                    otherTagsRaw: props.other_tags || null
                 });
             }
         };
@@ -202,7 +236,12 @@ function parseOsmXml(content, defaultSpeedKmh) {
         if (!tags.highway) continue;
 
         const speedKmh = parseMaxspeedToKmh(tags.maxspeed, speedFromHighway(tags.highway, defaultSpeedKmh));
-        const isBidirectional = String(tags.oneway || '').toLowerCase() !== 'yes';
+        const oneway = String(tags.oneway || '').toLowerCase() || null;
+        const isBidirectional = !['yes', '1', 'true', '-1'].includes(oneway);
+        const motorcar = tags.motorcar || tags.motor_vehicle || null;
+        const motorcycle = tags.motorcycle || null;
+        const junction = tags.junction || null;
+        const osmId = /<way\b[^>]*id="([^"]+)"/.exec(m[0])?.[1] || null;
 
         for (let i = 1; i < refs.length; i++) {
             const a = nodeMap.get(refs[i - 1]);
@@ -212,7 +251,14 @@ function parseOsmXml(content, defaultSpeedKmh) {
                 from: { lng: a.lng, lat: a.lat },
                 to: { lng: b.lng, lat: b.lat },
                 speedLimitMps: toMps(speedKmh),
-                isBidirectional
+                isBidirectional,
+                oneway,
+                highway: tags.highway || null,
+                junction,
+                motorcar,
+                motorcycle,
+                osmId,
+                otherTagsRaw: null
             });
         }
     }
@@ -300,11 +346,19 @@ async function insertEdgesBatch(client, edges, batchSize) {
         const lengths = c.map((e) => e.lengthM);
         const speeds = c.map((e) => e.speedLimitMps);
         const bis = c.map((e) => e.isBidirectional);
+        const oneWays = c.map((e) => e.oneway);
+        const highways = c.map((e) => e.highway);
+        const junctions = c.map((e) => e.junction);
+        const motorcars = c.map((e) => e.motorcar);
+        const motorcycles = c.map((e) => e.motorcycle);
+        const osmIds = c.map((e) => e.osmId);
+        const otherTagsRaw = c.map((e) => e.otherTagsRaw);
 
         await client.query(
             `
             INSERT INTO road_edges (
-                from_node_id, to_node_id, geom, length_m, speed_limit_mps, is_bidirectional
+                from_node_id, to_node_id, geom, length_m, speed_limit_mps, is_bidirectional,
+                oneway, highway, junction, motorcar, motorcycle, osm_id, other_tags
             )
             SELECT
                 t.from_id,
@@ -312,7 +366,14 @@ async function insertEdgesBatch(client, edges, batchSize) {
                 ST_SetSRID(ST_MakeLine(ST_MakePoint(t.from_lng, t.from_lat), ST_MakePoint(t.to_lng, t.to_lat)), 4326)::geography,
                 t.length_m,
                 t.speed_mps,
-                t.is_bi
+                t.is_bi,
+                t.oneway,
+                t.highway,
+                t.junction,
+                t.motorcar,
+                t.motorcycle,
+                t.osm_id,
+                t.other_tags
             FROM UNNEST(
                 $1::bigint[],
                 $2::bigint[],
@@ -322,10 +383,20 @@ async function insertEdgesBatch(client, edges, batchSize) {
                 $6::double precision[],
                 $7::double precision[],
                 $8::double precision[],
-                $9::boolean[]
-            ) AS t(from_id, to_id, from_lng, from_lat, to_lng, to_lat, length_m, speed_mps, is_bi)
+                $9::boolean[],
+                $10::text[],
+                $11::text[],
+                $12::text[],
+                $13::text[],
+                $14::text[],
+                $15::text[],
+                $16::text[]
+            ) AS t(from_id, to_id, from_lng, from_lat, to_lng, to_lat, length_m, speed_mps, is_bi, oneway, highway, junction, motorcar, motorcycle, osm_id, other_tags)
             `,
-            [fromIds, toIds, fromLngs, fromLats, toLngs, toLats, lengths, speeds, bis]
+            [
+                fromIds, toIds, fromLngs, fromLats, toLngs, toLats, lengths, speeds, bis,
+                oneWays, highways, junctions, motorcars, motorcycles, osmIds, otherTagsRaw
+            ]
         );
         inserted += c.length;
         if (inserted % (batchSize * 2) === 0 || inserted === edges.length) {
@@ -337,6 +408,19 @@ async function insertEdgesBatch(client, edges, batchSize) {
         }
     }
     return inserted;
+}
+
+async function ensureRoadEdgeTrafficColumns(client) {
+    await client.query(`
+        ALTER TABLE road_edges
+        ADD COLUMN IF NOT EXISTS oneway TEXT,
+        ADD COLUMN IF NOT EXISTS highway TEXT,
+        ADD COLUMN IF NOT EXISTS junction TEXT,
+        ADD COLUMN IF NOT EXISTS motorcar TEXT,
+        ADD COLUMN IF NOT EXISTS motorcycle TEXT,
+        ADD COLUMN IF NOT EXISTS osm_id TEXT,
+        ADD COLUMN IF NOT EXISTS other_tags TEXT
+    `);
 }
 
 async function truncateRoadTables(client, args) {
@@ -435,6 +519,7 @@ async function run() {
         await client.query('BEGIN');
         await client.query(`SET LOCAL lock_timeout = '${args.lockTimeoutMs}ms'`);
         await client.query('SET LOCAL synchronous_commit = OFF');
+        await ensureRoadEdgeTrafficColumns(client);
 
         const tPrepare = Date.now();
         console.log(`[${nowIso()}] ⚙️  Chuẩn bị node/edge với batchSize=${args.batchSize}...`);
@@ -455,7 +540,14 @@ async function run() {
                 to: seg.to,
                 lengthM,
                 speedLimitMps: seg.speedLimitMps,
-                isBidirectional: !!seg.isBidirectional
+                isBidirectional: !!seg.isBidirectional,
+                oneway: seg.oneway || null,
+                highway: seg.highway || null,
+                junction: seg.junction || null,
+                motorcar: seg.motorcar || null,
+                motorcycle: seg.motorcycle || null,
+                osmId: seg.osmId || null,
+                otherTagsRaw: seg.otherTagsRaw || null
             });
             if ((idx + 1) % 50000 === 0) {
                 const elapsed = Date.now() - tPrepare;
