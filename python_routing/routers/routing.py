@@ -6,6 +6,7 @@ so the frontend doesn't need any changes.
 """
 from __future__ import annotations
 
+import asyncio
 import math
 import logging
 from fastapi import APIRouter, Query, HTTPException
@@ -20,6 +21,39 @@ from config import ROUTING_NEAREST_NODE_MAX_M, ROUTING_SNAP_CANDIDATE_LIMIT
 logger = logging.getLogger("routing")
 
 router = APIRouter(prefix="/api/v1/routing", tags=["routing"])
+
+
+def _run_snap_astar_combinations(snap, start_candidates, end_candidates, vehicle, is_dry):
+    """CPU-bound: many A* runs — must not block the asyncio event loop."""
+    best_result = None
+    best_start = None
+    best_end = None
+    for s in start_candidates:
+        s_id = s["id"]
+        if s_id not in snap.adj_forward:
+            continue
+        for e in end_candidates:
+            e_id = e["id"]
+            if e_id not in snap.adj_forward:
+                continue
+            r = find_path(
+                snap=snap,
+                start_id=s_id,
+                end_id=e_id,
+                vehicle=vehicle,
+                is_dry=is_dry,
+            )
+            if r is None:
+                continue
+            snap_penalty = float(s["distance_m"]) + float(e["distance_m"])
+            score = r.total_cost + snap_penalty
+            if best_result is None or score < (
+                best_result.total_cost + float(best_start["distance_m"]) + float(best_end["distance_m"])
+            ):
+                best_result = r
+                best_start = s
+                best_end = e
+    return best_result, best_start, best_end
 
 
 @router.get("/safe-path")
@@ -81,39 +115,16 @@ async def safe_path(
             detail="Start/End node không nằm trong đồ thị đường đang active.",
         )
 
-    # ── Run A* ────────────────────────────────────────────────────────────
+    # ── Run A* (thread pool: đồ thị lớn + nhiều combo dễ block event loop vài chục giây → 502) ─
     is_dry = not snap.has_any_flood
-
-    best_result = None
-    best_start = None
-    best_end = None
-
-    # Evaluate multiple snap combinations, then pick minimum total score
-    # (path cost + tiny snap penalty). This reduces wrong-way routes caused
-    # by choosing a nearest node on the opposite carriageway.
-    for s in start_candidates:
-        s_id = s["id"]
-        if s_id not in snap.adj_forward:
-            continue
-        for e in end_candidates:
-            e_id = e["id"]
-            if e_id not in snap.adj_forward:
-                continue
-            r = find_path(
-                snap=snap,
-                start_id=s_id,
-                end_id=e_id,
-                vehicle=vehicle,
-                is_dry=is_dry,
-            )
-            if r is None:
-                continue
-            snap_penalty = float(s["distance_m"]) + float(e["distance_m"])
-            score = r.total_cost + snap_penalty
-            if best_result is None or score < (best_result.total_cost + float(best_start["distance_m"]) + float(best_end["distance_m"])):
-                best_result = r
-                best_start = s
-                best_end = e
+    best_result, best_start, best_end = await asyncio.to_thread(
+        _run_snap_astar_combinations,
+        snap,
+        start_candidates,
+        end_candidates,
+        vehicle,
+        is_dry,
+    )
 
     result = best_result
     start_node = best_start or start_candidates[0]

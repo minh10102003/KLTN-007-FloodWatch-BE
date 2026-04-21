@@ -216,6 +216,107 @@ LIMIT $4
 """
 
 
+def _build_graph_snapshot_from_rows(
+    rows: list,
+    ml_predictions: dict[int, float],
+) -> GraphSnapshot:
+    """
+    CPU-heavy graph materialization (must not run on asyncio event loop).
+    """
+    snap = GraphSnapshot()
+    has_flood = False
+
+    for row in rows:
+        from_id = int(row["from_node_id"])
+        to_id = int(row["to_node_id"])
+
+        from_lng = _safe_float(row["from_lng"])
+        from_lat = _safe_float(row["from_lat"])
+        to_lng = _safe_float(row["to_lng"])
+        to_lat = _safe_float(row["to_lat"])
+        length_m = _safe_float(row["length_m"])
+        speed = _safe_float(row["speed_limit_mps"])
+        db_flood = _safe_float(row["flood_depth_cm"]) or 0.0
+        is_bidir = bool(row["is_bidirectional"])
+        oneway = _normalize_text(row.get("oneway"))
+        highway = _normalize_text(row.get("highway"))
+        junction = _normalize_text(row.get("junction"))
+        motorcar_allowed = _tag_allows_vehicle(row.get("motorcar"))
+        motorcycle_allowed = _tag_allows_vehicle(row.get("motorcycle"))
+        is_roundabout = junction == "roundabout"
+        if is_roundabout and oneway not in {"yes", "1", "true", "-1"}:
+            oneway = "yes"
+
+        edge_id = int(row["id"])
+        ml_depth = ml_predictions.get(edge_id, 0.0)
+        flood = max(db_flood, ml_depth)
+
+        if from_lng is None or from_lat is None or to_lng is None or to_lat is None:
+            continue
+        if length_m is None or length_m <= 0:
+            continue
+
+        speed = max(0.1, speed if speed else 0.1)
+
+        if flood > 0:
+            has_flood = True
+
+        if from_id not in snap.node_pos:
+            snap.node_pos[from_id] = NodePos(from_lng, from_lat)
+        if to_id not in snap.node_pos:
+            snap.node_pos[to_id] = NodePos(to_lng, to_lat)
+
+        forward_allowed = _allows_forward(oneway)
+        reverse_allowed = _allows_reverse(oneway, is_bidir)
+
+        if forward_allowed:
+            _add_directed_edge(
+                snap=snap,
+                edge=Edge(
+                    edge_id=edge_id,
+                    to_node=to_id,
+                    from_node=from_id,
+                    length_m=length_m,
+                    speed_limit_mps=speed,
+                    flood_depth_cm=flood,
+                    is_bidirectional=is_bidir,
+                    oneway=oneway,
+                    highway=highway,
+                    junction=junction,
+                    motorcar_allowed=motorcar_allowed,
+                    motorcycle_allowed=motorcycle_allowed,
+                    is_roundabout=is_roundabout,
+                    source_is_reverse=False,
+                ),
+            )
+
+        if reverse_allowed:
+            _add_directed_edge(
+                snap=snap,
+                edge=Edge(
+                    edge_id=edge_id,
+                    to_node=from_id,
+                    from_node=to_id,
+                    length_m=length_m,
+                    speed_limit_mps=speed,
+                    flood_depth_cm=flood,
+                    is_bidirectional=is_bidir,
+                    oneway=oneway,
+                    highway=highway,
+                    junction=junction,
+                    motorcar_allowed=motorcar_allowed,
+                    motorcycle_allowed=motorcycle_allowed,
+                    is_roundabout=is_roundabout,
+                    source_is_reverse=True,
+                ),
+            )
+
+    snap.has_any_flood = has_flood
+    snap.node_count = len(snap.node_pos)
+    snap.edge_count = len(snap.all_edges)
+    return snap
+
+
 # ── GraphCache ────────────────────────────────────────────────────────────────
 
 class GraphCache:
@@ -313,106 +414,18 @@ class GraphCache:
                     })
                 
                 logger.info("Running ML inference for %d edges...", len(ml_edges))
-                ml_predictions = flood_predictor.predict_edge_depths(ml_edges, sensors, flood_logs, crowd_reports)
+                ml_predictions = await asyncio.to_thread(
+                    flood_predictor.predict_edge_depths,
+                    ml_edges,
+                    sensors,
+                    flood_logs,
+                    crowd_reports,
+                )
             except Exception as e:
                 logger.error("Failed to run ML predictor: %s", e)
 
-        snap = GraphSnapshot()
-        has_flood = False
-
-        for row in rows:
-            from_id = int(row["from_node_id"])
-            to_id = int(row["to_node_id"])
-
-            from_lng = _safe_float(row["from_lng"])
-            from_lat = _safe_float(row["from_lat"])
-            to_lng = _safe_float(row["to_lng"])
-            to_lat = _safe_float(row["to_lat"])
-            length_m = _safe_float(row["length_m"])
-            speed = _safe_float(row["speed_limit_mps"])
-            db_flood = _safe_float(row["flood_depth_cm"]) or 0.0
-            is_bidir = bool(row["is_bidirectional"])
-            oneway = _normalize_text(row.get("oneway"))
-            highway = _normalize_text(row.get("highway"))
-            junction = _normalize_text(row.get("junction"))
-            motorcar_allowed = _tag_allows_vehicle(row.get("motorcar"))
-            motorcycle_allowed = _tag_allows_vehicle(row.get("motorcycle"))
-            is_roundabout = junction == "roundabout"
-            if is_roundabout and oneway not in {"yes", "1", "true", "-1"}:
-                # OSM exports often mis-tag ring segments as oneway=no. Traffic always circulates
-                # one way along the way geometry; bidirectional ring edges allow illegal shortcuts.
-                oneway = "yes"
-            
-            # Apply ML prediction (take the max of deterministic and ML)
-            edge_id = int(row["id"])
-            ml_depth = ml_predictions.get(edge_id, 0.0)
-            flood = max(db_flood, ml_depth)
-
-            if from_lng is None or from_lat is None or to_lng is None or to_lat is None:
-                continue
-            if length_m is None or length_m <= 0:
-                continue
-
-            speed = max(0.1, speed if speed else 0.1)
-
-            if flood > 0:
-                has_flood = True
-
-            # Register node positions
-            if from_id not in snap.node_pos:
-                snap.node_pos[from_id] = NodePos(from_lng, from_lat)
-            if to_id not in snap.node_pos:
-                snap.node_pos[to_id] = NodePos(to_lng, to_lat)
-
-            forward_allowed = _allows_forward(oneway)
-            reverse_allowed = _allows_reverse(oneway, is_bidir)
-            edge_id = int(row["id"])
-
-            if forward_allowed:
-                _add_directed_edge(
-                    snap=snap,
-                    edge=Edge(
-                        edge_id=edge_id,
-                        to_node=to_id,
-                        from_node=from_id,
-                        length_m=length_m,
-                        speed_limit_mps=speed,
-                        flood_depth_cm=flood,
-                        is_bidirectional=is_bidir,
-                        oneway=oneway,
-                        highway=highway,
-                        junction=junction,
-                        motorcar_allowed=motorcar_allowed,
-                        motorcycle_allowed=motorcycle_allowed,
-                        is_roundabout=is_roundabout,
-                        source_is_reverse=False,
-                    ),
-                )
-
-            if reverse_allowed:
-                _add_directed_edge(
-                    snap=snap,
-                    edge=Edge(
-                        edge_id=edge_id,
-                        to_node=from_id,
-                        from_node=to_id,
-                        length_m=length_m,
-                        speed_limit_mps=speed,
-                        flood_depth_cm=flood,
-                        is_bidirectional=is_bidir,
-                        oneway=oneway,
-                        highway=highway,
-                        junction=junction,
-                        motorcar_allowed=motorcar_allowed,
-                        motorcycle_allowed=motorcycle_allowed,
-                        is_roundabout=is_roundabout,
-                        source_is_reverse=True,
-                    ),
-                )
-
-        snap.has_any_flood = has_flood
-        snap.node_count = len(snap.node_pos)
-        snap.edge_count = len(snap.all_edges)
+        # Millions of edges: must not block asyncio (health checks + other requests would 502).
+        snap = await asyncio.to_thread(_build_graph_snapshot_from_rows, rows, ml_predictions)
 
         # Atomic swap
         async with self._lock:
@@ -422,7 +435,7 @@ class GraphCache:
             "Graph refreshed: %d nodes, %d edges, flood=%s",
             snap.node_count,
             snap.edge_count,
-            has_flood,
+            snap.has_any_flood,
         )
         _debug_log_traffic_points(snap)
         return snap
