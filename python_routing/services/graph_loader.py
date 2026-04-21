@@ -122,7 +122,7 @@ SELECT
     e.length_m,
     e.speed_limit_mps,
     e.is_bidirectional,
-    {traffic_select_sql}
+    {traffic_select_sql},
     ST_X(fn.location::geometry) AS from_lng,
     ST_Y(fn.location::geometry) AS from_lat,
     ST_X(tn.location::geometry) AS to_lng,
