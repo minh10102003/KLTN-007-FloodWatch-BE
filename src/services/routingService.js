@@ -13,7 +13,8 @@ function readPositiveIntEnv(name, fallback) {
 
 /** Gọi Python /safe-path: graph lớn + A* có thể >10s; quá ngắn sẽ abort rồi fallback Node (rất chậm) → client hay bị 15s timeout. */
 const PYTHON_ROUTING_FETCH_TIMEOUT_MS = readPositiveIntEnv('PYTHON_ROUTING_FETCH_TIMEOUT_MS', 120_000);
-const PYTHON_ROUTING_HEALTH_TIMEOUT_MS = readPositiveIntEnv('PYTHON_ROUTING_HEALTH_TIMEOUT_MS', 5_000);
+/** Health: Railway cold start / graph load có thể >5s; legacy path dùng health để fail nhanh. */
+const PYTHON_ROUTING_HEALTH_TIMEOUT_MS = readPositiveIntEnv('PYTHON_ROUTING_HEALTH_TIMEOUT_MS', 15_000);
 
 /** Trên production đồ thị lớn (~M edges), fallback A* legacy trong Node dễ OOM / treo > proxy Railway → 502. Đặt false để chỉ dùng Python và trả 503 rõ ràng khi Python lỗi. */
 const ROUTING_LEGACY_FALLBACK = String(process.env.ROUTING_LEGACY_FALLBACK || 'true').toLowerCase() !== 'false';
@@ -362,16 +363,24 @@ async function isPythonServiceAvailable() {
     if (_pythonServiceAvailable !== null && (now - _lastHealthCheck) < HEALTH_CHECK_INTERVAL_MS) {
         return _pythonServiceAvailable;
     }
-    try {
-        const response = await fetch(`${PYTHON_ROUTING_URL}/health`, {
-            signal: AbortSignal.timeout(PYTHON_ROUTING_HEALTH_TIMEOUT_MS)
-        });
-        _pythonServiceAvailable = response.ok;
-    } catch {
-        _pythonServiceAvailable = false;
+    const attempts = 3;
+    for (let i = 0; i < attempts; i++) {
+        try {
+            const response = await fetch(`${PYTHON_ROUTING_URL}/health`, {
+                signal: AbortSignal.timeout(PYTHON_ROUTING_HEALTH_TIMEOUT_MS)
+            });
+            _pythonServiceAvailable = response.ok;
+            _lastHealthCheck = Date.now();
+            return _pythonServiceAvailable;
+        } catch {
+            if (i < attempts - 1) {
+                await new Promise((r) => setTimeout(r, 1000 * (i + 1)));
+            }
+        }
     }
-    _lastHealthCheck = now;
-    return _pythonServiceAvailable;
+    _pythonServiceAvailable = false;
+    _lastHealthCheck = Date.now();
+    return false;
 }
 
 // ── Primary: call Python service via HTTP ────────────────────────────────────
@@ -398,29 +407,31 @@ async function findSafePathViaPython({ start_lng, start_lat, end_lng, end_lat, v
 // ── Public API with fallback ─────────────────────────────────────────────────
 const routingService = {
     async findSafePath(params) {
-        // Try Python service first
-        const pythonUp = await isPythonServiceAvailable();
-        if (pythonUp) {
-            try {
-                return await findSafePathViaPython(params);
-            } catch (err) {
-                console.warn('[routing] Python service failed, falling back to Node.js A*:', err.message);
-                // Reset cache so we re-check next time
-                _pythonServiceAvailable = null;
-                if (!ROUTING_LEGACY_FALLBACK) {
-                    throw new Error(
-                        `service unavailable: Python routing lỗi (${err.message}). Đặt ROUTING_LEGACY_FALLBACK=true tạm thời nếu cần fallback Node (không khuyến nghị với đồ thị lớn).`
-                    );
-                }
+        // Chỉ dùng health khi còn fallback legacy: fail nhanh, tránh chờ timeout safe-path 120s.
+        // ROUTING_LEGACY_FALLBACK=false: KHÔNG gọi health — health hay false-negative (cold start Railway,
+        // Python bận) dù GET /safe-path vẫn chạy được → trước đây trả 503 sai.
+        if (ROUTING_LEGACY_FALLBACK) {
+            const pythonUp = await isPythonServiceAvailable();
+            if (!pythonUp) {
+                return findSafePathLegacy(params);
             }
-        } else if (!ROUTING_LEGACY_FALLBACK) {
-            throw new Error(
-                'service unavailable: Python routing không khả dụng (health check fail) và ROUTING_LEGACY_FALLBACK=false.'
-            );
         }
 
-        // Fallback to legacy Node.js A*
-        return findSafePathLegacy(params);
+        try {
+            const data = await findSafePathViaPython(params);
+            _pythonServiceAvailable = true;
+            _lastHealthCheck = Date.now();
+            return data;
+        } catch (err) {
+            console.warn('[routing] Python safe-path failed:', err.message);
+            _pythonServiceAvailable = null;
+            if (!ROUTING_LEGACY_FALLBACK) {
+                throw new Error(
+                    `service unavailable: Python routing lỗi (${err.message}). Đặt ROUTING_LEGACY_FALLBACK=true tạm thời nếu cần fallback Node (không khuyến nghị với đồ thị lớn).`
+                );
+            }
+            return findSafePathLegacy(params);
+        }
     }
 };
 
