@@ -1,0 +1,4 @@
+# Khi Railway đặt Root Directory = python_routing, Nixpacks dùng file này để
+# build Python và chạy đúng lệnh (tránh image Node không có pip).
+[start]
+cmd = "python main.py"
