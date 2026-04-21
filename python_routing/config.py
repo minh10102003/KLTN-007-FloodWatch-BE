@@ -52,7 +52,8 @@ DB_PASS = _str("DB_PASS", "")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 # ── Python Routing Service ────────────────────────────────────────────────────
-PYTHON_ROUTING_PORT = _int("PYTHON_ROUTING_PORT", 8001)
+# Railway (và nhiều PaaS) inject PORT; local dev thường dùng PYTHON_ROUTING_PORT=8001
+PYTHON_ROUTING_PORT = _int("PORT", _int("PYTHON_ROUTING_PORT", 8001))
 GRAPH_REFRESH_INTERVAL_SECONDS = _int("GRAPH_REFRESH_INTERVAL_SECONDS", 60)
 
 # ── Routing parameters (same names as Node.js .env.example) ───────────────────
