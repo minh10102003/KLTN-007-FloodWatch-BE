@@ -170,12 +170,24 @@ function parseGeoJson(content, defaultSpeedKmh) {
             props.maxspeed || pickTag(otherTags, 'maxspeed'),
             speedFromHighway(props.highway || props.road_type, defaultSpeedKmh)
         );
-        const oneway = String(props.oneway || pickTag(otherTags, 'oneway') || '').toLowerCase() || null;
+        const highway = props.highway || props.road_type || pickTag(otherTags, 'highway');
+        const hwNorm = String(highway || '').toLowerCase();
+        const lanesRaw = props.lanes != null ? props.lanes : pickTag(otherTags, 'lanes');
+        const laneNum = Number(String(lanesRaw ?? '').replace(/[^0-9.]/g, '')) || 0;
+        let oneway = String(props.oneway || pickTag(otherTags, 'oneway') || '').toLowerCase() || null;
+        // Wide primary/secondary/trunk tagged oneway=no while adjacent segments are one-way (e.g. Lý Chính Thắng)
+        // creates bidirectional edges on an actually one-way carriageway. Prefer geometry direction as legal flow.
+        if (
+            oneway === 'no' &&
+            ['primary', 'secondary', 'trunk'].includes(hwNorm) &&
+            laneNum >= 3
+        ) {
+            oneway = 'yes';
+        }
         const bidirectional = !['yes', '1', 'true', '-1'].includes(oneway);
         const motorcar = pickTag(otherTags, 'motorcar', 'motor_vehicle');
         const motorcycle = pickTag(otherTags, 'motorcycle');
         const junction = pickTag(otherTags, 'junction');
-        const highway = props.highway || props.road_type || pickTag(otherTags, 'highway');
         const osmId = props.osm_id != null ? String(props.osm_id) : null;
 
         const pushLine = (coords) => {
