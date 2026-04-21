@@ -6,6 +6,15 @@
 
 const PYTHON_ROUTING_URL = process.env.PYTHON_ROUTING_URL || 'http://localhost:8001';
 
+function readPositiveIntEnv(name, fallback) {
+    const n = Number(process.env[name]);
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
+}
+
+/** Gọi Python /safe-path: graph lớn + A* có thể >10s; quá ngắn sẽ abort rồi fallback Node (rất chậm) → client hay bị 15s timeout. */
+const PYTHON_ROUTING_FETCH_TIMEOUT_MS = readPositiveIntEnv('PYTHON_ROUTING_FETCH_TIMEOUT_MS', 120_000);
+const PYTHON_ROUTING_HEALTH_TIMEOUT_MS = readPositiveIntEnv('PYTHON_ROUTING_HEALTH_TIMEOUT_MS', 5_000);
+
 // ── Legacy A* (fallback) ─────────────────────────────────────────────────────
 const routingRepository = require('../repositories/routingRepository');
 
@@ -352,7 +361,7 @@ async function isPythonServiceAvailable() {
     }
     try {
         const response = await fetch(`${PYTHON_ROUTING_URL}/health`, {
-            signal: AbortSignal.timeout(3000)
+            signal: AbortSignal.timeout(PYTHON_ROUTING_HEALTH_TIMEOUT_MS)
         });
         _pythonServiceAvailable = response.ok;
     } catch {
@@ -374,7 +383,7 @@ async function findSafePathViaPython({ start_lng, start_lat, end_lng, end_lat, v
         url.searchParams.set('nearest_node_max_m', nearest_node_max_m);
     }
 
-    const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    const response = await fetch(url, { signal: AbortSignal.timeout(PYTHON_ROUTING_FETCH_TIMEOUT_MS) });
     if (!response.ok) {
         const body = await response.json().catch(() => ({}));
         throw new Error(body.detail || body.error || `Python routing error: ${response.status}`);
