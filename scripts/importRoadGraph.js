@@ -157,6 +157,12 @@ function haversineMeters(a, b) {
     return 2 * R * Math.asin(Math.sqrt(h));
 }
 
+/** Lòng đường OSM (không phải "Hẻm … Lý Chính Thắng"). Một số đoạn nối gắn oneway=no + ít làn nhưng thực tế một chiều liên tục với cả tuyến. */
+function isMainLyChinhThangCarriagewayName(name) {
+    const s = String(name || '').trim();
+    return s === 'Lý Chính Thắng' || s === 'Đường Lý Chính Thắng';
+}
+
 function parseGeoJson(content, defaultSpeedKmh) {
     const obj = JSON.parse(content);
     const features = Array.isArray(obj.features) ? obj.features : [];
@@ -175,12 +181,14 @@ function parseGeoJson(content, defaultSpeedKmh) {
         const lanesRaw = props.lanes != null ? props.lanes : pickTag(otherTags, 'lanes');
         const laneNum = Number(String(lanesRaw ?? '').replace(/[^0-9.]/g, '')) || 0;
         let oneway = String(props.oneway || pickTag(otherTags, 'oneway') || '').toLowerCase() || null;
+        const streetName = props.name || pickTag(otherTags, 'name');
         // Wide primary/secondary/trunk tagged oneway=no while adjacent segments are one-way (e.g. Lý Chính Thắng)
         // creates bidirectional edges on an actually one-way carriageway. Prefer geometry direction as legal flow.
+        // Short connectors on LCT sometimes have oneway=no + lanes=1 (OSM way 220216405) — still one-way in reality.
         if (
             oneway === 'no' &&
             ['primary', 'secondary', 'trunk'].includes(hwNorm) &&
-            laneNum >= 3
+            (laneNum >= 3 || isMainLyChinhThangCarriagewayName(streetName))
         ) {
             oneway = 'yes';
         }
@@ -248,7 +256,18 @@ function parseOsmXml(content, defaultSpeedKmh) {
         if (!tags.highway) continue;
 
         const speedKmh = parseMaxspeedToKmh(tags.maxspeed, speedFromHighway(tags.highway, defaultSpeedKmh));
-        const oneway = String(tags.oneway || '').toLowerCase() || null;
+        const hwNorm = String(tags.highway || '').toLowerCase();
+        const lanesRaw = tags.lanes;
+        const laneNum = Number(String(lanesRaw ?? '').replace(/[^0-9.]/g, '')) || 0;
+        let oneway = String(tags.oneway || '').toLowerCase() || null;
+        const streetName = tags.name || '';
+        if (
+            oneway === 'no' &&
+            ['primary', 'secondary', 'trunk'].includes(hwNorm) &&
+            (laneNum >= 3 || isMainLyChinhThangCarriagewayName(streetName))
+        ) {
+            oneway = 'yes';
+        }
         const isBidirectional = !['yes', '1', 'true', '-1'].includes(oneway);
         const motorcar = tags.motorcar || tags.motor_vehicle || null;
         const motorcycle = tags.motorcycle || null;
