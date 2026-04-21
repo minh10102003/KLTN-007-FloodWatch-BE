@@ -338,8 +338,9 @@ class GraphCache:
             motorcar_allowed = _tag_allows_vehicle(row.get("motorcar"))
             motorcycle_allowed = _tag_allows_vehicle(row.get("motorcycle"))
             is_roundabout = junction == "roundabout"
-            if is_roundabout and oneway is None:
-                # Default OSM semantics for roundabout: enforce one-way direction.
+            if is_roundabout and oneway not in {"yes", "1", "true", "-1"}:
+                # OSM exports often mis-tag ring segments as oneway=no. Traffic always circulates
+                # one way along the way geometry; bidirectional ring edges allow illegal shortcuts.
                 oneway = "yes"
             
             # Apply ML prediction (take the max of deterministic and ML)
