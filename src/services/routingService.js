@@ -15,6 +15,9 @@ function readPositiveIntEnv(name, fallback) {
 const PYTHON_ROUTING_FETCH_TIMEOUT_MS = readPositiveIntEnv('PYTHON_ROUTING_FETCH_TIMEOUT_MS', 120_000);
 const PYTHON_ROUTING_HEALTH_TIMEOUT_MS = readPositiveIntEnv('PYTHON_ROUTING_HEALTH_TIMEOUT_MS', 5_000);
 
+/** Trên production đồ thị lớn (~M edges), fallback A* legacy trong Node dễ OOM / treo > proxy Railway → 502. Đặt false để chỉ dùng Python và trả 503 rõ ràng khi Python lỗi. */
+const ROUTING_LEGACY_FALLBACK = String(process.env.ROUTING_LEGACY_FALLBACK || 'true').toLowerCase() !== 'false';
+
 // ── Legacy A* (fallback) ─────────────────────────────────────────────────────
 const routingRepository = require('../repositories/routingRepository');
 
@@ -404,7 +407,16 @@ const routingService = {
                 console.warn('[routing] Python service failed, falling back to Node.js A*:', err.message);
                 // Reset cache so we re-check next time
                 _pythonServiceAvailable = null;
+                if (!ROUTING_LEGACY_FALLBACK) {
+                    throw new Error(
+                        `service unavailable: Python routing lỗi (${err.message}). Đặt ROUTING_LEGACY_FALLBACK=true tạm thời nếu cần fallback Node (không khuyến nghị với đồ thị lớn).`
+                    );
+                }
             }
+        } else if (!ROUTING_LEGACY_FALLBACK) {
+            throw new Error(
+                'service unavailable: Python routing không khả dụng (health check fail) và ROUTING_LEGACY_FALLBACK=false.'
+            );
         }
 
         // Fallback to legacy Node.js A*
