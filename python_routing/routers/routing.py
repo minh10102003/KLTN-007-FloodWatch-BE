@@ -15,7 +15,7 @@ from services.flood_penalty import parse_vehicle_type, VEHICLE_PROFILES
 from services.astar import find_path
 from services.path_smoother import smooth_path
 from services.ml_predictor import flood_predictor
-from config import ROUTING_NEAREST_NODE_MAX_M
+from config import ROUTING_NEAREST_NODE_MAX_M, ROUTING_SNAP_CANDIDATE_LIMIT
 
 logger = logging.getLogger("routing")
 
@@ -62,8 +62,12 @@ async def safe_path(
         )
 
     # ── Find candidate nodes (avoid snapping to wrong carriageway) ───────
-    start_candidates = await graph_cache.get_nearest_nodes(start_lng, start_lat, max_nearest, limit=6)
-    end_candidates = await graph_cache.get_nearest_nodes(end_lng, end_lat, max_nearest, limit=6)
+    start_candidates = await graph_cache.get_nearest_nodes(
+        start_lng, start_lat, max_nearest, limit=ROUTING_SNAP_CANDIDATE_LIMIT
+    )
+    end_candidates = await graph_cache.get_nearest_nodes(
+        end_lng, end_lat, max_nearest, limit=ROUTING_SNAP_CANDIDATE_LIMIT
+    )
 
     if not start_candidates or not end_candidates:
         raise HTTPException(
