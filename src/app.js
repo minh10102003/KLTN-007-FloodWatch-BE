@@ -33,8 +33,49 @@ if (process.env.TRUST_PROXY !== 'false') {
     app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS || 1) || 1);
 }
 
+function parseAllowedOrigins(raw) {
+    if (!raw || typeof raw !== 'string') return [];
+    return raw
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+}
+
+const allowedOrigins = parseAllowedOrigins(process.env.CORS_ALLOWED_ORIGINS);
+const defaultDevOrigins = [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000'
+];
+const defaultProdOrigins = [
+    'https://floodsight.id.vn',
+    'https://www.floodsight.id.vn',
+    'https://floodlight.id.vn',
+    'https://www.floodlight.id.vn'
+];
+const finalAllowedOrigins = new Set([
+    ...defaultDevOrigins,
+    ...defaultProdOrigins,
+    ...allowedOrigins
+]);
+
+const corsOptions = {
+    origin(origin, callback) {
+        // Non-browser clients (curl/postman) may not send Origin header.
+        if (!origin) return callback(null, true);
+        if (finalAllowedOrigins.has(origin)) return callback(null, true);
+        return callback(new Error(`CORS blocked for origin: ${origin}`), false);
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    optionsSuccessStatus: 204
+};
+
 // Middleware
-app.use(cors()); // Cho phép FE và BE chạy trên các cổng khác nhau
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json()); // Cho phép Backend đọc dữ liệu JSON từ trình duyệt gửi lên
 app.use(express.static('public')); // Cấu hình để phục vụ file tĩnh từ thư mục public
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads'))); // Ảnh báo cáo (upload)
