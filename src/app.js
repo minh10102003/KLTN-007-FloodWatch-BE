@@ -75,7 +75,6 @@ const corsOptions = {
 
 // Middleware
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
 app.use(express.json()); // Cho phép Backend đọc dữ liệu JSON từ trình duyệt gửi lên
 app.use(express.static('public')); // Cấu hình để phục vụ file tĩnh từ thư mục public
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads'))); // Ảnh báo cáo (upload)
