@@ -17,6 +17,8 @@ const PYTHON_ROUTING_FETCH_TIMEOUT_MS = readPositiveIntEnv('PYTHON_ROUTING_FETCH
 const PYTHON_ROUTING_HEALTH_TIMEOUT_MS = readPositiveIntEnv('PYTHON_ROUTING_HEALTH_TIMEOUT_MS', 15_000);
 /** Tắt hoàn toàn Python routing để chạy Node legacy như trước (single service). */
 const PYTHON_ROUTING_ENABLED = String(process.env.PYTHON_ROUTING_ENABLED || 'true').toLowerCase() !== 'false';
+/** Cầu chì cho single-service mode: tắt legacy A* nặng để tránh OOM toàn backend. */
+const ROUTING_LEGACY_ENABLED = String(process.env.ROUTING_LEGACY_ENABLED || 'true').toLowerCase() !== 'false';
 
 /** Trên production đồ thị lớn (~M edges), fallback A* legacy trong Node dễ OOM / treo > proxy Railway → 502. Đặt false để chỉ dùng Python và trả 503 rõ ràng khi Python lỗi. */
 const ROUTING_LEGACY_FALLBACK = String(process.env.ROUTING_LEGACY_FALLBACK || 'true').toLowerCase() !== 'false';
@@ -413,6 +415,11 @@ async function findSafePathViaPython({ start_lng, start_lat, end_lng, end_lat, v
 const routingService = {
     async findSafePath(params) {
         if (!PYTHON_ROUTING_ENABLED) {
+            if (!ROUTING_LEGACY_ENABLED) {
+                throw new Error(
+                    'service unavailable: Legacy Node routing đang tắt (ROUTING_LEGACY_ENABLED=false) để bảo vệ server khỏi OOM.'
+                );
+            }
             return findSafePathLegacy(params);
         }
         // Chỉ dùng health khi còn fallback legacy: fail nhanh, tránh chờ timeout safe-path 120s.
@@ -436,6 +443,11 @@ const routingService = {
             if (!ROUTING_LEGACY_FALLBACK) {
                 throw new Error(
                     `service unavailable: Python routing lỗi (${err.message}). Đặt ROUTING_LEGACY_FALLBACK=true tạm thời nếu cần fallback Node (không khuyến nghị với đồ thị lớn).`
+                );
+            }
+            if (!ROUTING_LEGACY_ENABLED) {
+                throw new Error(
+                    'service unavailable: Python routing lỗi và legacy routing đang tắt (ROUTING_LEGACY_ENABLED=false).'
                 );
             }
             return findSafePathLegacy(params);
