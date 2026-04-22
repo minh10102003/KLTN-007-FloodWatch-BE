@@ -81,11 +81,14 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.error("Failed to load initial graph: %s", exc, exc_info=True)
 
-    # 4. Start background refresh task
-    _refresh_task = asyncio.create_task(_graph_refresh_loop())
-    logger.info(
-        "Background graph refresh every %ds.", GRAPH_REFRESH_INTERVAL_SECONDS
-    )
+    # 4. Start background refresh task (optional)
+    if GRAPH_REFRESH_INTERVAL_SECONDS > 0:
+        _refresh_task = asyncio.create_task(_graph_refresh_loop())
+        logger.info(
+            "Background graph refresh every %ds.", GRAPH_REFRESH_INTERVAL_SECONDS
+        )
+    else:
+        logger.info("Background graph refresh disabled (GRAPH_REFRESH_INTERVAL_SECONDS<=0).")
 
     yield
 

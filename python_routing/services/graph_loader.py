@@ -22,6 +22,7 @@ from config import (
     ROUTING_CROWD_MAX_BOOST,
     ROUTING_SENSOR_FLOOD_RADIUS_M,
     ROUTING_SENSOR_FLOOD_DECAY,
+    ROUTING_ENABLE_BIDIRECTIONAL,
     ROUTING_TRAFFIC_DEBUG_ENABLED,
     ROUTING_TRAFFIC_DEBUG_POINTS,
 )
@@ -63,8 +64,6 @@ class GraphSnapshot:
     adj_backward: dict[int, list[Edge]] = field(default_factory=dict)
     # node positions
     node_pos: dict[int, NodePos] = field(default_factory=dict)
-    # all edges (for iteration)
-    all_edges: list[Edge] = field(default_factory=list)
     # whether any edge has flood > 0
     has_any_flood: bool = False
     # node count / edge count for logging
@@ -313,7 +312,7 @@ def _build_graph_snapshot_from_rows(
 
     snap.has_any_flood = has_flood
     snap.node_count = len(snap.node_pos)
-    snap.edge_count = len(snap.all_edges)
+    # edge_count is maintained incrementally in _add_directed_edge()
     return snap
 
 
@@ -551,25 +550,26 @@ def _allows_reverse(oneway: str | None, is_bidir: bool) -> bool:
 
 def _add_directed_edge(snap: GraphSnapshot, edge: Edge) -> None:
     snap.adj_forward.setdefault(edge.from_node, []).append(edge)
-    snap.all_edges.append(edge)
-    snap.adj_backward.setdefault(edge.to_node, []).append(
-        Edge(
-            edge_id=edge.edge_id,
-            to_node=edge.from_node,
-            from_node=edge.to_node,
-            length_m=edge.length_m,
-            speed_limit_mps=edge.speed_limit_mps,
-            flood_depth_cm=edge.flood_depth_cm,
-            is_bidirectional=edge.is_bidirectional,
-            oneway=edge.oneway,
-            highway=edge.highway,
-            junction=edge.junction,
-            motorcar_allowed=edge.motorcar_allowed,
-            motorcycle_allowed=edge.motorcycle_allowed,
-            is_roundabout=edge.is_roundabout,
-            source_is_reverse=not edge.source_is_reverse,
+    snap.edge_count += 1
+    if ROUTING_ENABLE_BIDIRECTIONAL:
+        snap.adj_backward.setdefault(edge.to_node, []).append(
+            Edge(
+                edge_id=edge.edge_id,
+                to_node=edge.from_node,
+                from_node=edge.to_node,
+                length_m=edge.length_m,
+                speed_limit_mps=edge.speed_limit_mps,
+                flood_depth_cm=edge.flood_depth_cm,
+                is_bidirectional=edge.is_bidirectional,
+                oneway=edge.oneway,
+                highway=edge.highway,
+                junction=edge.junction,
+                motorcar_allowed=edge.motorcar_allowed,
+                motorcycle_allowed=edge.motorcycle_allowed,
+                is_roundabout=edge.is_roundabout,
+                source_is_reverse=not edge.source_is_reverse,
+            )
         )
-    )
 
 
 def _parse_debug_points(raw: str) -> list[tuple[float, float]]:

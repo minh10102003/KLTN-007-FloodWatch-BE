@@ -15,6 +15,8 @@ function readPositiveIntEnv(name, fallback) {
 const PYTHON_ROUTING_FETCH_TIMEOUT_MS = readPositiveIntEnv('PYTHON_ROUTING_FETCH_TIMEOUT_MS', 120_000);
 /** Health: Railway cold start / graph load có thể >5s; legacy path dùng health để fail nhanh. */
 const PYTHON_ROUTING_HEALTH_TIMEOUT_MS = readPositiveIntEnv('PYTHON_ROUTING_HEALTH_TIMEOUT_MS', 15_000);
+/** Tắt hoàn toàn Python routing để chạy Node legacy như trước (single service). */
+const PYTHON_ROUTING_ENABLED = String(process.env.PYTHON_ROUTING_ENABLED || 'true').toLowerCase() !== 'false';
 
 /** Trên production đồ thị lớn (~M edges), fallback A* legacy trong Node dễ OOM / treo > proxy Railway → 502. Đặt false để chỉ dùng Python và trả 503 rõ ràng khi Python lỗi. */
 const ROUTING_LEGACY_FALLBACK = String(process.env.ROUTING_LEGACY_FALLBACK || 'true').toLowerCase() !== 'false';
@@ -359,6 +361,9 @@ let _lastHealthCheck = 0;
 const HEALTH_CHECK_INTERVAL_MS = 30_000; // re-check every 30s
 
 async function isPythonServiceAvailable() {
+    if (!PYTHON_ROUTING_ENABLED) {
+        return false;
+    }
     const now = Date.now();
     if (_pythonServiceAvailable !== null && (now - _lastHealthCheck) < HEALTH_CHECK_INTERVAL_MS) {
         return _pythonServiceAvailable;
@@ -407,6 +412,9 @@ async function findSafePathViaPython({ start_lng, start_lat, end_lng, end_lat, v
 // ── Public API with fallback ─────────────────────────────────────────────────
 const routingService = {
     async findSafePath(params) {
+        if (!PYTHON_ROUTING_ENABLED) {
+            return findSafePathLegacy(params);
+        }
         // Chỉ dùng health khi còn fallback legacy: fail nhanh, tránh chờ timeout safe-path 120s.
         // ROUTING_LEGACY_FALLBACK=false: KHÔNG gọi health — health hay false-negative (cold start Railway,
         // Python bận) dù GET /safe-path vẫn chạy được → trước đây trả 503 sai.
