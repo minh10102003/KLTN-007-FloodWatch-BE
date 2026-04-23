@@ -35,6 +35,7 @@
     "check-moderation": "node scripts/checkModerationStatus.js",
     "start:python": "cd python_routing && python main.py",
     "start:all": "npx -y concurrently \"npm start\" \"npm run start:python\"",
+    "start:railway": "bash scripts/railway-start.sh",
     "train:flood-model": "cd python_routing && python ml/train_flood_model.py"
   },
   "keywords": [],

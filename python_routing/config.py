@@ -52,8 +52,14 @@ DB_PASS = _str("DB_PASS", "")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 # ── Python Routing Service ────────────────────────────────────────────────────
-# Railway (và nhiều PaaS) inject PORT; local dev thường dùng PYTHON_ROUTING_PORT=8001
-PYTHON_ROUTING_PORT = _int("PORT", _int("PYTHON_ROUTING_PORT", 8001))
+# Railway inject PORT cho process chính (thường là Node). Khi chạy monolith
+# (Node + Python cùng container), Python PHẢI dùng PYTHON_ROUTING_PORT (vd 8001),
+# không được trùng PORT của Express.
+# Service Python riêng: không set PYTHON_ROUTING_PORT, để Railway PORT map vào uvicorn.
+if os.getenv("PYTHON_ROUTING_PORT") is not None and str(os.getenv("PYTHON_ROUTING_PORT")).strip() != "":
+    PYTHON_ROUTING_PORT = _int("PYTHON_ROUTING_PORT", 8001)
+else:
+    PYTHON_ROUTING_PORT = _int("PORT", 8001)
 GRAPH_REFRESH_INTERVAL_SECONDS = _int("GRAPH_REFRESH_INTERVAL_SECONDS", 60)
 
 # ── Routing parameters (same names as Node.js .env.example) ───────────────────
