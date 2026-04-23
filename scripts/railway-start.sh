@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Monolith: FastAPI routing (python_routing) + Express (Node) trong cùng 1 Railway service.
-# Railway Start Command: bash scripts/railway-start.sh
+# Railway: ưu tiên dùng `node scripts/railway-start.js` (path ổn định). Script bash giữ cho máy dev.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

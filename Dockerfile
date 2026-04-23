@@ -30,8 +30,7 @@ ENV PYTHON_ROUTING_PORT=8001
 
 COPY . .
 
-RUN chmod +x scripts/railway-start.sh
-
 EXPOSE 3000
 
-CMD ["bash", "scripts/railway-start.sh"]
+# Dùng Node launcher để luôn resolve đúng path (Railway Start Command đôi khi cwd ≠ /app).
+CMD ["node", "scripts/railway-start.js"]
