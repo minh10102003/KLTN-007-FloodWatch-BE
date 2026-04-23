@@ -29,6 +29,9 @@ VEHICLE_PROFILES: dict[str, VehicleProfile] = {
 def parse_vehicle_type(vehicle_type: str | None) -> VehicleProfile | None:
     """Parse vehicle_type string → VehicleProfile or None."""
     key = (vehicle_type or "motorbike").strip().lower()
+    # FE/OSM hay dùng "motorcycle"; API chuẩn là "motorbike" (khớp Swagger).
+    if key == "motorcycle":
+        key = "motorbike"
     return VEHICLE_PROFILES.get(key)
 
 

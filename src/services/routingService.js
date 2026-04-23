@@ -82,7 +82,8 @@ function reconstructPath(cameFrom, current) {
 }
 
 function parseVehicleType(vehicleType) {
-    const key = String(vehicleType || 'motorbike').trim().toLowerCase();
+    let key = String(vehicleType || 'motorbike').trim().toLowerCase();
+    if (key === 'motorcycle') key = 'motorbike';
     return VEHICLE_PROFILES[key] || null;
 }
 

@@ -29,6 +29,7 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
  *       - in: query
  *         name: vehicle_type
  *         schema: { type: string, enum: [motorbike, car, suv], default: motorbike }
+ *         description: motorbike|car|suv; FE có thể gửi motorcycle (alias → motorbike)
  *       - in: query
  *         name: nearest_node_max_m
  *         schema: { type: integer, minimum: 150, maximum: 5000, default: 1200 }

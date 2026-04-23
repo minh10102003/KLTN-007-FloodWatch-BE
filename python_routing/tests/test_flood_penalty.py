@@ -85,6 +85,7 @@ def test_parse_vehicle_type():
     assert parse_vehicle_type("car") is not None
     assert parse_vehicle_type("suv") is not None
     assert parse_vehicle_type("MOTORBIKE") is not None  # case insensitive
+    assert parse_vehicle_type("motorcycle") is not None  # alias → motorbike
     assert parse_vehicle_type("bicycle") is None
     assert parse_vehicle_type(None) is not None  # defaults to motorbike
 
