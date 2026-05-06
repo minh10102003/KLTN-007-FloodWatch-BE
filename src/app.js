@@ -28,12 +28,12 @@ const path = require('path');
 
 const app = express();
 
-// Railway / reverse proxy: để req.protocol và host đúng (https) khi ghép URL ảnh
+// Trust reverse proxy headers on Railway by default.
 if (process.env.TRUST_PROXY !== 'false') {
     app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS || 1) || 1);
 }
 
-function parseAllowedOrigins(raw) {
+function parseCsv(raw) {
     if (!raw || typeof raw !== 'string') return [];
     return raw
         .split(',')
@@ -41,7 +41,22 @@ function parseAllowedOrigins(raw) {
         .filter(Boolean);
 }
 
-const allowedOrigins = parseAllowedOrigins(process.env.CORS_ALLOWED_ORIGINS);
+function isAllowedBySuffix(origin, suffixes) {
+    try {
+        const host = new URL(origin).hostname.toLowerCase();
+        return suffixes.some((suffix) => {
+            const s = String(suffix || '').toLowerCase();
+            if (!s) return false;
+            if (s.startsWith('.')) return host.endsWith(s);
+            return host === s || host.endsWith(`.${s}`);
+        });
+    } catch {
+        return false;
+    }
+}
+
+const allowedOrigins = parseCsv(process.env.CORS_ALLOWED_ORIGINS);
+const allowedOriginSuffixes = parseCsv(process.env.CORS_ALLOWED_ORIGIN_SUFFIXES);
 const defaultDevOrigins = [
     'http://localhost:5173',
     'http://127.0.0.1:5173',
@@ -59,12 +74,14 @@ const finalAllowedOrigins = new Set([
     ...defaultProdOrigins,
     ...allowedOrigins
 ]);
+const finalAllowedSuffixes = ['.vercel.app', ...allowedOriginSuffixes];
 
 const corsOptions = {
     origin(origin, callback) {
         // Non-browser clients (curl/postman) may not send Origin header.
         if (!origin) return callback(null, true);
         if (finalAllowedOrigins.has(origin)) return callback(null, true);
+        if (isAllowedBySuffix(origin, finalAllowedSuffixes)) return callback(null, true);
         return callback(new Error(`CORS blocked for origin: ${origin}`), false);
     },
     credentials: true,
@@ -75,35 +92,31 @@ const corsOptions = {
 
 // Middleware
 app.use(cors(corsOptions));
-app.use(express.json()); // Cho phép Backend đọc dữ liệu JSON từ trình duyệt gửi lên
-app.use(express.static('public')); // Cấu hình để phục vụ file tĩnh từ thư mục public
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads'))); // Ảnh báo cáo (upload)
+app.use(express.json());
+app.use(express.static('public'));
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 // Swagger Documentation
 swaggerSetup(app);
 
-// Ghi lượt truy cập mỗi request tới /api (để thống kê hàng tháng)
+// Track API access for monthly stats
 app.use('/api', accessLogMiddleware);
 
 const { authenticate } = require('./middleware/auth');
 
 // ==========================================
-// 1. KHỐI PUBLIC (Không yêu cầu Token)
+// 1. PUBLIC BLOCK (No token required)
 // ==========================================
 app.use('/api/auth', authRoutes);
-app.use('/api', telegramRoutes); // Webhook không dùng JWT
-// uploadRoutes có thể chứa GET /api/uploads/:filename nếu có, nhưng thường upload tĩnh được phục vụ ở trên. 
-// Nếu upload cũng cần bảo mật (chỉ cho phép đăng ảnh khi đã đăng nhập) thì đẩy xuống dưới.
-// Tạm thời đưa uploadRoutes xuống Protected block vì hành động tải file lên nên cần xác thực.
+app.use('/api', telegramRoutes);
 
 // ==========================================
-// 2. MIDDLEWARE XÁC THỰC TOÀN CỤC
+// 2. GLOBAL AUTH MIDDLEWARE
 // ==========================================
-// Bất kỳ request nào đi qua dòng này mà không có token hợp lệ đều bị chặn (401)
 app.use('/api', authenticate);
 
 // ==========================================
-// 3. KHỐI PROTECTED (Yêu cầu Token)
+// 3. PROTECTED BLOCK (Token required)
 // ==========================================
 app.use('/api', floodRoutes);
 app.use('/api', fusionRoutes);
@@ -127,9 +140,3 @@ app.use('/api', statsRoutes);
 app.use('/api', uploadRoutes);
 
 module.exports = app;
-
-
-
-
-
-
