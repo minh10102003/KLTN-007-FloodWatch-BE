@@ -1,0 +1,193 @@
+@startuml
+title HCM Flood Backend — Class Diagram (tổng quát)
+
+hide circle
+
+' --- Kiểu hiển thị giống mẫu: nền xanh nhạt, đường nối vuông góc, không khung layer ---
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+skinparam ArrowColor #1B2838
+skinparam ArrowThickness 1
+skinparam RankSep 70
+skinparam Nodesep 45
+
+skinparam ClassBorderColor #1565C0
+skinparam ClassFontColor #000000
+skinparam ClassBackgroundColor #EBF5FB
+skinparam ClassHeaderBackgroundColor #90CAF9
+
+' ===================== Lớp chính (rút gọn, đại diện kiến trúc) =====================
+
+class HttpServer <<entrypoint>> {
+  - expressApp : Application
+  - nativeServer : HttpServerInstance
+  --
+  + startHttpServer() : void
+  + startMqttWorker() : void
+}
+
+class ExpressApplication <<express-app>> {
+  - middlewareStack : Object
+  - routeRegistry : Object
+  --
+  + registerMiddleware() : void
+  + registerRoutes() : void
+}
+
+class AuthController <<controller>> {
+  --
+  + register(req : Request, res : Response) : Promise<void>
+  + login(req : Request, res : Response) : Promise<void>
+  + refreshToken(req : Request, res : Response) : Promise<void>
+  + getProfile(req : Request, res : Response) : Promise<void>
+}
+
+class FloodController <<controller>> {
+  --
+  + getFloodData(req : Request, res : Response) : Promise<void>
+  + getRealTimeFloodData(req : Request, res : Response) : Promise<void>
+  + getFloodHistory(req : Request, res : Response) : Promise<void>
+}
+
+class SensorController <<controller>> {
+  --
+  + getAllSensors(req : Request, res : Response) : Promise<void>
+  + createSensor(req : Request, res : Response) : Promise<void>
+  + updateSensor(req : Request, res : Response) : Promise<void>
+}
+
+class RoutingService <<service>> {
+  --
+  + findSafePath(params : Object) : Promise<Object>
+}
+
+class MqttService <<service>> {
+  - kalmanFilters : Map~String, KalmanFilter~
+  --
+  + start() : void
+  + handleSensorPayload(payload : Object) : Promise<void>
+}
+
+class KalmanFilter {
+  - estimate : double
+  - errorEstimate : double
+  - errorMeasurement : double
+  - processNoise : double
+  --
+  + update(measurement : double) : double
+}
+
+class EmergencyNotificationService <<service>> {
+  --
+  + notifySubscribers(alert : Object) : Promise<void>
+}
+
+class TokenService <<service>> {
+  --
+  + signAccessToken(claims : Object) : Promise<string>
+  + verifyAccessToken(token : string) : Promise<Object>
+}
+
+class OtpService <<service>> {
+  --
+  + generateOtp(userId : int) : Promise<void>
+  + verifyOtp(userId : int, code : string) : Promise<boolean>
+}
+
+class UserModel <<model-facade>> {
+  --
+  + register(data : Object) : Promise<Object>
+  + login(data : Object) : Promise<Object>
+}
+
+class FloodModel <<model-facade>> {
+  --
+  + getLatestState() : Promise<Object>
+}
+
+class SensorModel <<model-facade>> {
+  --
+  + getOverview() : Promise<Object>
+}
+
+class BaseRepository {
+  - pool : PgPool
+  --
+  + query(sql : string, params : Object[]) : Promise<Object[]>
+  + queryOne(sql : string, params : Object[]) : Promise<Object | null>
+}
+
+class UserRepository {
+  --
+  + findByEmail(email : string) : Promise<Object | null>
+  + createUser(data : Object) : Promise<Object>
+}
+
+class FloodRepository {
+  --
+  + insertReading(data : Object) : Promise<void>
+  + getHistory(filters : Object) : Promise<Object[]>
+}
+
+class SensorRepository {
+  --
+  + upsertSensor(data : Object) : Promise<Object>
+  + findById(id : int) : Promise<Object | null>
+}
+
+class AlertRepository {
+  --
+  + createAlert(data : Object) : Promise<Object>
+  + getActiveAlerts() : Promise<Object[]>
+}
+
+class RoutingRepository {
+  --
+  + saveRouteRequest(record : Object) : Promise<void>
+}
+
+class PostgreSQL <<database>> {
+  --
+  + engine : string = "PostgreSQL"
+}
+
+' ===================== Quan hệ (không dùng -->, ..>; chỉ -- , .. , --|> , *--) =====================
+
+HttpServer "1" -- "1" ExpressApplication : khởi tạo\nvà chạy
+
+HttpServer "1" -- "1" MqttService : worker\nsong song
+
+ExpressApplication "1" .. "*" AuthController : ánh xạ\nHTTP
+ExpressApplication "1" .. "*" FloodController : ánh xạ\nHTTP
+ExpressApplication "1" .. "*" SensorController : ánh xạ\nHTTP
+
+AuthController .. UserModel : use
+AuthController .. TokenService : use
+AuthController .. OtpService : use
+
+FloodController .. FloodModel : use
+SensorController .. SensorModel : use
+
+UserModel .. UserRepository : use
+FloodModel .. FloodRepository : use
+SensorModel .. SensorRepository : use
+
+RoutingService .. RoutingRepository : use
+
+MqttService "1" *-- "0..*" KalmanFilter : composition
+
+MqttService .. FloodRepository : use
+MqttService .. SensorRepository : use
+MqttService .. AlertRepository : use
+MqttService .. EmergencyNotificationService : use
+
+UserRepository --|> BaseRepository
+FloodRepository --|> BaseRepository
+SensorRepository --|> BaseRepository
+AlertRepository --|> BaseRepository
+RoutingRepository --|> BaseRepository
+
+BaseRepository "1" -- "1" PostgreSQL : pool\n(node-pg)
+
+@enduml
