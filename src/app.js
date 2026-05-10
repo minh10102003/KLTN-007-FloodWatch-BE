@@ -68,6 +68,7 @@ const defaultDevOrigins = [
 const defaultProdOrigins = [
     'https://floodsight.id.vn',
     'https://www.floodsight.id.vn',
+    'https://admin.floodsight.id.vn',
     'https://floodlight.id.vn',
     'https://www.floodlight.id.vn'
 ];
