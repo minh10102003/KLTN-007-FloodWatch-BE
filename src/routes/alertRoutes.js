@@ -72,7 +72,7 @@ const { authenticate, requireModerator } = require('../middleware/auth');
  *                   items:
  *                     $ref: '#/components/schemas/Alert'
  */
-router.get('/', authenticate, alertController.getAllAlerts);
+router.get('/', alertController.getAllAlerts);
 
 /**
  * @swagger
@@ -115,7 +115,7 @@ router.get('/', authenticate, alertController.getAllAlerts);
  *                   items:
  *                     $ref: '#/components/schemas/Alert'
  */
-router.get('/active', authenticate, alertController.getActiveAlerts);
+router.get('/active', alertController.getActiveAlerts);
 
 /**
  * @swagger
@@ -158,7 +158,7 @@ router.get('/active', authenticate, alertController.getActiveAlerts);
  *                         type: integer
  *                         example: 5
  */
-router.get('/stats', authenticate, alertController.getAlertStats);
+router.get('/stats', alertController.getAlertStats);
 
 /**
  * @swagger
@@ -196,7 +196,7 @@ router.get('/stats', authenticate, alertController.getAlertStats);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/:alertId', authenticate, alertController.getAlertById);
+router.get('/:alertId', alertController.getAlertById);
 
 /**
  * @swagger

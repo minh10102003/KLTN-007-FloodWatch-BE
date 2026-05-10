@@ -104,7 +104,7 @@ swaggerSetup(app);
 // Track API access for monthly stats
 app.use('/api', accessLogMiddleware);
 
-const { authenticate } = require('./middleware/auth');
+const { apiAccess } = require('./middleware/apiAccess');
 
 // ==========================================
 // 1. PUBLIC BLOCK (No token required)
@@ -113,9 +113,9 @@ app.use('/api/auth', authRoutes);
 app.use('/api', telegramRoutes);
 
 // ==========================================
-// 2. GLOBAL AUTH MIDDLEWARE
+// 2. GLOBAL API ACCESS (đọc công khai / optional Bearer → apiAccess)
 // ==========================================
-app.use('/api', authenticate);
+app.use('/api', apiAccess);
 
 // ==========================================
 // 3. PROTECTED BLOCK (Token required)
