@@ -24,6 +24,7 @@ const statsRoutes = require('./routes/statsRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 const auditLogRoutes = require('./routes/auditLogRoutes');
 const accessLogMiddleware = require('./middleware/accessLogMiddleware');
+const googleAuthRoutes = require('./routes/googleAuthRoutes');
 const path = require('path');
 
 const app = express();
@@ -112,6 +113,7 @@ const { apiAccess } = require('./middleware/apiAccess');
 // ==========================================
 app.use('/api/auth', authRoutes);
 app.use('/api', telegramRoutes);
+app.use('/api/v1/auth', googleAuthRoutes);
 
 // ==========================================
 // 2. GLOBAL API ACCESS (đọc công khai / optional Bearer → apiAccess)

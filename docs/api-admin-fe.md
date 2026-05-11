@@ -364,3 +364,23 @@ FE sẽ thay mock bằng gọi các endpoint trên khi có.
 - **Đăng xuất:** `POST /api/auth/logout` (có token) + xóa token/user ở FE.
 
 Tài liệu này đủ để FE kết nối BE cho các function Admin đã làm; phần chưa có endpoint ghi rõ để FE giữ mock hoặc chuẩn bị nối khi BE mở rộng.
+
+---
+
+## 6. Đăng nhập Google (OAuth) — FE user (`floodsight.id.vn`)
+
+**Không** gửi `client_secret` từ trình duyệt. Luồng: FE mở URL bắt đầu OAuth trên API → user đăng nhập Google → API callback → redirect về FE kèm token trong **hash** (`#...`).
+
+| Bước | Mô tả |
+|------|--------|
+| 1 | FE chuyển hướng (window hoặc link) tới: `GET https://api.floodsight.id.vn/api/v1/auth/google` |
+| 2 | BE redirect sang Google (`response_type=code`, `scope=openid email profile`, `state` ký JWT, `access_type=offline`, `prompt=consent`). |
+| 3 | Google redirect về: `GET https://api.floodsight.id.vn/api/v1/auth/google/callback?code=...&state=...` |
+| 4 | BE đổi `code` lấy `id_token`, xác minh, tìm/tạo user, phát **cùng cơ chế** access/refresh/session như `POST /api/auth/login`. |
+| 5 | BE redirect trình duyệt tới `GOOGLE_OAUTH_SUCCESS_REDIRECT` (mặc định `https://floodsight.id.vn/login`) với hash ví dụ: `#oauth=google&access_token=...&refresh_token=...&session_token=...&expires_in=...&token=...&refresh_expires_at=...` |
+
+**Lỗi:** redirect tới `GOOGLE_OAUTH_ERROR_REDIRECT` (hoặc cùng URL thành công) với `#oauth_error=google&message=...`
+
+**FE:** sau redirect, đọc `window.location.hash` (parse query-style), lưu token giống login thường, rồi `history.replaceState` bỏ hash nếu cần.
+
+**Biến môi trường BE:** xem `.env.example` (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, …).

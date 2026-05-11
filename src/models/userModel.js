@@ -152,6 +152,64 @@ const userModel = {
     },
 
     /**
+     * Đăng nhập / đăng ký lần đầu qua Google (email đã được Google xác minh).
+     * User đã có cùng email → đăng nhập; chưa có → tạo user role `user`, email_verified_at = now.
+     */
+    async loginOrRegisterWithGoogle({ sub, email, name }) {
+        const normalized = String(email || '')
+            .trim()
+            .toLowerCase();
+        if (!normalized) {
+            throw new Error('Thiếu email từ Google');
+        }
+
+        let row = await userRepository.findByEmail(normalized);
+        if (row) {
+            if (!row.is_active) {
+                throw new Error('Tài khoản đã bị vô hiệu hóa');
+            }
+            if (!row.email_verified_at) {
+                await userRepository.setEmailVerifiedAt(row.id, new Date());
+            }
+        } else {
+            const username = await this._pickUniqueGoogleUsername(sub);
+            const password_hash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
+            row = await userRepository.createUser({
+                username,
+                email: normalized,
+                password_hash,
+                full_name: (name && String(name).trim()) || normalized.split('@')[0] || username,
+                phone: null,
+                role: 'user',
+                email_verified_at: new Date()
+            });
+        }
+
+        await userRepository.updateLastLogin(row.id);
+        const user = await userRepository.findById(row.id);
+        if (!user || !user.is_active) {
+            throw new Error('Tài khoản không hợp lệ');
+        }
+
+        const tokens = await this._issueTokensForUser(user);
+        return { user, ...tokens };
+    },
+
+    /** Username duy nhất ≤ 50 ký tự (ràng buộc DB), từ Google `sub`. */
+    async _pickUniqueGoogleUsername(sub) {
+        const raw = String(sub || '').replace(/[^a-zA-Z0-9_]/g, '_');
+        let base = (`g_${raw}` || 'g_user').slice(0, 50);
+        let candidate = base;
+        let n = 0;
+        while (await userRepository.findByUsername(candidate)) {
+            n += 1;
+            const suffix = `_${n}`;
+            candidate = (base.slice(0, Math.max(1, 50 - suffix.length)) + suffix).slice(0, 50);
+        }
+        return candidate;
+    },
+
+    /**
      * Làm mới access JWT bằng refresh token + session_token (UUID phiên).
      * Refresh token được rotate mỗi lần gọi.
      */
