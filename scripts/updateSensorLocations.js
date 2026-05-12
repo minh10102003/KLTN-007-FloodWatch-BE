@@ -23,20 +23,34 @@ const pool = new Pool(
 );
 
 async function reverseGeocode(lat, lng) {
-    const url = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=vi`;
-    const response = await fetch(url);
+    const apiKey = String(process.env.GOOGLE_GEOCODING_API_KEY || '').trim();
+    if (!apiKey) {
+        throw new Error('Thiếu GOOGLE_GEOCODING_API_KEY (Google Geocoding API key)');
+    }
+
+    const url = new URL('https://maps.googleapis.com/maps/api/geocode/json');
+    url.searchParams.set('latlng', `${lat},${lng}`);
+    url.searchParams.set('key', apiKey);
+    url.searchParams.set('language', 'vi'); // bắt buộc: tiếng Việt có dấu
+    url.searchParams.set('region', 'VN');
+
+    const response = await fetch(url.toString());
     if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
     }
     const data = await response.json();
 
-    // Xây dựng địa chỉ từ các trường của BigDataCloud
-    const parts = [];
-    if (data.locality) parts.push(data.locality);
-    if (data.city) parts.push(data.city);
-    if (data.principalSubdivision) parts.push(data.principalSubdivision);
+    if (data.status !== 'OK') {
+        const msg = data.error_message ? ` - ${data.error_message}` : '';
+        throw new Error(`Google Geocoding status: ${data.status}${msg}`);
+    }
 
-    return parts.join(', ') || 'Không xác định được địa chỉ';
+    // Ưu tiên formatted_address tiếng Việt (có dấu). Lấy kết quả đầu tiên.
+    const formatted = data.results?.[0]?.formatted_address;
+    if (!formatted) return 'Không xác định được địa chỉ';
+
+    // Chuẩn hoá: bỏ hậu tố quốc gia nếu có (tuỳ chọn)
+    return String(formatted).replace(/,?\s*Việt Nam\s*$/i, '').trim();
 }
 
 async function run() {
