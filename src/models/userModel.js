@@ -119,10 +119,18 @@ const userModel = {
     },
 
     /**
-     * Đăng nhập
+     * Đăng nhập (username hoặc email đã đăng ký + mật khẩu).
      */
     async login(username, password) {
-        const user = await userRepository.findByUsername(username);
+        const raw = String(username || '').trim();
+        if (!raw) {
+            throw new Error('Username hoặc password không đúng');
+        }
+
+        let user = await userRepository.findByUsername(raw);
+        if (!user) {
+            user = await userRepository.findByEmail(raw.toLowerCase());
+        }
         if (!user) {
             throw new Error('Username hoặc password không đúng');
         }

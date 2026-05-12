@@ -65,7 +65,7 @@ const authController = {
             if (!username || !password) {
                 return res.status(400).json({
                     success: false,
-                    error: 'Thiếu thông tin: username, password'
+                    error: 'Thiếu thông tin: username (hoặc email), password'
                 });
             }
 

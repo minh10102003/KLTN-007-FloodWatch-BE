@@ -84,6 +84,8 @@ router.post('/register', authController.register);
  *       **Ví dụ đăng nhập User thường:**
  *       - Username: `user123`
  *       - Password: `password123`
+ *
+ *       Trường `username` cũng chấp nhận **email** đã đăng ký (không đổi tên field JSON).
  *       
  *       Trả về **access_token** (JWT, mặc định **30 phút** qua `JWT_ACCESS_EXPIRES_IN`), **refresh_token**, **session_token** (UUID phiên),
  *       **expires_in** (giây), **refresh_expires_at** (ISO — hết phiên refresh thì phải đăng nhập lại).
@@ -100,7 +102,7 @@ router.post('/register', authController.register);
  *             properties:
  *               username:
  *                 type: string
- *                 description: Username (có thể là user, admin, hoặc moderator)
+ *                 description: Username hoặc email đã đăng ký (user, admin, moderator)
  *                 example: admin
  *               password:
  *                 type: string
@@ -117,6 +119,11 @@ router.post('/register', authController.register);
  *               summary: Đăng nhập User thường
  *               value:
  *                 username: user123
+ *                 password: password123
+ *             byEmail:
+ *               summary: Đăng nhập bằng email
+ *               value:
+ *                 username: user@example.com
  *                 password: password123
  *     responses:
  *       200:
@@ -192,7 +199,7 @@ router.post('/register', authController.register);
  *                     session_token: 550e8400-e29b-41d4-a716-446655440001
  *                     token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
  *       400:
- *         description: Thiếu thông tin username hoặc password
+ *         description: Thiếu thông tin username (hoặc email) hoặc password
  *         content:
  *           application/json:
  *             schema:
