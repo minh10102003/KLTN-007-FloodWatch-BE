@@ -325,6 +325,59 @@ const authController = {
         }
     },
 
+    forgotPassword: async (req, res) => {
+        try {
+            const { email } = req.body;
+            if (!email) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Thiếu thông tin: email'
+                });
+            }
+            const data = await otpService.sendForgotPasswordOtp(email);
+            res.status(201).json({
+                success: true,
+                message: 'Đã gửi OTP đặt lại mật khẩu qua email',
+                data
+            });
+        } catch (err) {
+            const status = /thiếu|chờ|quá số lần|chưa được đăng ký|vô hiệu hóa|xác minh email trước/i.test(
+                err.message
+            )
+                ? 400
+                : 500;
+            res.status(status).json({
+                success: false,
+                error: err.message
+            });
+        }
+    },
+
+    resetPassword: async (req, res) => {
+        try {
+            const { email, otp_code, new_password } = req.body;
+            if (!email || !otp_code || !new_password) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Thiếu thông tin: email, otp_code, new_password'
+                });
+            }
+            await userModel.resetPasswordWithOtp(email, otp_code, new_password);
+            res.json({
+                success: true,
+                message: 'Đã đặt lại mật khẩu. Bạn có thể đăng nhập bằng mật khẩu mới.'
+            });
+        } catch (err) {
+            const status = /thiếu|hết hạn|không chính xác|không tồn tại|ít nhất 6/i.test(err.message)
+                ? 400
+                : 500;
+            res.status(status).json({
+                success: false,
+                error: err.message
+            });
+        }
+    },
+
     // Xác thực OTP
     verifyOtp: async (req, res) => {
         try {

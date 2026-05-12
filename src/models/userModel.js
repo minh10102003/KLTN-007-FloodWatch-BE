@@ -342,6 +342,31 @@ const userModel = {
     },
 
     /**
+     * Đặt mật khẩu mới sau khi xác thực OTP quên mật khẩu (purpose `password_reset`).
+     */
+    async resetPasswordWithOtp(email, otpCode, newPassword) {
+        const pwd = String(newPassword || '');
+        if (pwd.length < 6) {
+            throw new Error('Mật khẩu mới phải có ít nhất 6 ký tự');
+        }
+
+        const out = await otpService.verifyOtpForPurpose(
+            email,
+            otpCode,
+            otpService.OTP_PURPOSE_PASSWORD_RESET
+        );
+
+        const user = await userRepository.findById(out.user_id);
+        if (!user) throw new Error('Không tìm thấy tài khoản');
+        if (!user.is_active) throw new Error('Tài khoản đã bị vô hiệu hóa');
+
+        const newPasswordHash = await bcrypt.hash(pwd, 10);
+        const updated = await userRepository.changePassword(user.id, newPasswordHash);
+        await userSessionRepository.revokeAllForUser(user.id);
+        return updated;
+    },
+
+    /**
      * Phân quyền (chỉ admin)
      */
     async assignRole(userId, role) {

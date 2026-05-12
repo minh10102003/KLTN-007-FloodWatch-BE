@@ -255,6 +255,59 @@ router.post('/verify-otp', authController.verifyOtp);
 
 /**
  * @swagger
+ * /api/auth/forgot-password:
+ *   post:
+ *     summary: Quên mật khẩu — gửi OTP qua email
+ *     description: |
+ *       Chỉ áp dụng cho email đã đăng ký, đã xác minh email, tài khoản đang hoạt động.
+ *       OTP có purpose `password_reset` (khác OTP đăng ký / đăng nhập). Sau khi nhận mã, gọi `POST /api/auth/reset-password`.
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email]
+ *             properties:
+ *               email: { type: string, format: email }
+ *     responses:
+ *       201:
+ *         description: Đã gửi OTP
+ *       400:
+ *         description: Email không hợp lệ, chưa đăng ký, chưa xác minh, vô hiệu, hoặc giới hạn gửi OTP
+ */
+router.post('/forgot-password', authController.forgotPassword);
+
+/**
+ * @swagger
+ * /api/auth/reset-password:
+ *   post:
+ *     summary: Đặt lại mật khẩu bằng OTP email
+ *     description: |
+ *       Xác thực OTP `password_reset` vừa gửi từ `POST /api/auth/forgot-password`, cập nhật mật khẩu và thu hồi mọi phiên đăng nhập.
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, otp_code, new_password]
+ *             properties:
+ *               email: { type: string, format: email }
+ *               otp_code: { type: string, example: "123456" }
+ *               new_password: { type: string, format: password, minLength: 6 }
+ *     responses:
+ *       200:
+ *         description: Đặt lại thành công; đăng nhập bằng username + mật khẩu mới
+ *       400:
+ *         description: Thiếu field, OTP sai/hết hạn, hoặc mật khẩu quá ngắn
+ */
+router.post('/reset-password', authController.resetPassword);
+
+/**
+ * @swagger
  * /api/auth/refresh:
  *   post:
  *     summary: Làm mới access JWT bằng refresh token

@@ -9,6 +9,7 @@ const OTP_RESEND_COOLDOWN_SECONDS = parseInt(process.env.OTP_RESEND_COOLDOWN_SEC
 const OTP_MAX_PER_HOUR = parseInt(process.env.OTP_MAX_PER_HOUR || '5', 10);
 const OTP_PURPOSE_AUTH = 'auth';
 const OTP_PURPOSE_REGISTRATION = 'registration';
+const OTP_PURPOSE_PASSWORD_RESET = 'password_reset';
 
 function normalizeEmail(email) {
     return String(email || '').trim().toLowerCase();
@@ -60,12 +61,23 @@ async function sendOtpEmail(email, code, purpose = OTP_PURPOSE_AUTH, user = {}) 
     const resend = new Resend(process.env.RESEND_API_KEY);
     const expiresText = `${OTP_TTL_MINUTES} phút`;
     const isRegistration = purpose === OTP_PURPOSE_REGISTRATION;
-    const subject = isRegistration ? 'Mã OTP hoàn tất đăng ký' : 'Mã OTP xác thực tài khoản';
-    const heading = isRegistration ? 'Xác minh email đăng ký' : 'Mã xác thực tài khoản';
+    const isPasswordReset = purpose === OTP_PURPOSE_PASSWORD_RESET;
+    const subject = isPasswordReset
+        ? 'Mã OTP đặt lại mật khẩu'
+        : isRegistration
+          ? 'Mã OTP hoàn tất đăng ký'
+          : 'Mã OTP xác thực tài khoản';
+    const heading = isPasswordReset
+        ? 'Đặt lại mật khẩu'
+        : isRegistration
+          ? 'Xác minh email đăng ký'
+          : 'Mã xác thực tài khoản';
     const brandName = String(process.env.OTP_BRAND_NAME || 'FloodWatch').trim() || 'FloodWatch';
-    const intro = isRegistration
-        ? `Dùng mã bên dưới để hoàn tất đăng ký ${brandName}. Sau khi xác minh email, bạn có thể đăng nhập vào hệ thống.`
-        : `Bạn vừa yêu cầu mã xác thực để tiếp tục sử dụng tài khoản ${brandName}.`;
+    const intro = isPasswordReset
+        ? `Bạn vừa yêu cầu đặt lại mật khẩu cho tài khoản ${brandName}. Dùng mã bên dưới để xác nhận và nhập mật khẩu mới.`
+        : isRegistration
+          ? `Dùng mã bên dưới để hoàn tất đăng ký ${brandName}. Sau khi xác minh email, bạn có thể đăng nhập vào hệ thống.`
+          : `Bạn vừa yêu cầu mã xác thực để tiếp tục sử dụng tài khoản ${brandName}.`;
 
     const name = user.full_name != null ? String(user.full_name).trim() : '';
     const greeting = name ? `Xin chào ${name},` : 'Xin chào,';
@@ -159,8 +171,83 @@ const otpService = {
         return toPublicOtp(otp);
     },
 
+    /**
+     * OTP quên mật khẩu — chỉ tài khoản đã xác minh email, đang hoạt động.
+     */
+    async sendForgotPasswordOtp(email) {
+        const normalizedEmail = normalizeEmail(email);
+        if (!normalizedEmail) {
+            throw new Error('Thiếu email');
+        }
+
+        const user = await userRepository.findByEmail(normalizedEmail);
+        if (!user) throw new Error('Email chưa được đăng ký');
+        if (!user.is_active) throw new Error('Tài khoản đã bị vô hiệu hóa');
+        if (!user.email_verified_at) {
+            throw new Error('Vui lòng xác minh email trước khi dùng chức năng quên mật khẩu');
+        }
+
+        const lastOtp = await otpRepository.findLatestActiveByEmailAnyPurpose(normalizedEmail);
+        if (lastOtp) {
+            const diffMs = Date.now() - new Date(lastOtp.created_at).getTime();
+            const cooldownMs = OTP_RESEND_COOLDOWN_SECONDS * 1000;
+            if (diffMs < cooldownMs) {
+                const waitSec = Math.ceil((cooldownMs - diffMs) / 1000);
+                throw new Error(`Vui lòng chờ ${waitSec}s trước khi gửi lại OTP`);
+            }
+        }
+
+        const recentCount = await otpRepository.countRecentByEmailAllPurposes(normalizedEmail, 60);
+        if (recentCount >= OTP_MAX_PER_HOUR) {
+            throw new Error('Bạn đã gửi OTP quá số lần cho phép trong 1 giờ');
+        }
+
+        const code = generateOtpCode();
+        const codeHash = hashOtp(code);
+        const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000);
+
+        const otp = await otpRepository.createOtp({
+            user_id: user.id,
+            email: normalizedEmail,
+            code_hash: codeHash,
+            expires_at: expiresAt,
+            purpose: OTP_PURPOSE_PASSWORD_RESET
+        });
+
+        await sendOtpEmail(normalizedEmail, code, OTP_PURPOSE_PASSWORD_RESET, user);
+        return toPublicOtp(otp);
+    },
+
     async resendOtp(email) {
         return await this.sendOtp(email);
+    },
+
+    async verifyOtpForPurpose(email, code, purpose) {
+        const normalizedEmail = normalizeEmail(email);
+        if (!normalizedEmail || !code || !purpose) {
+            throw new Error('Thiếu email, otp_code hoặc purpose không hợp lệ');
+        }
+
+        const otp = await otpRepository.findLatestActiveByEmail(normalizedEmail, purpose);
+        if (!otp) throw new Error('OTP không tồn tại hoặc đã được sử dụng');
+
+        if (new Date(otp.expires_at).getTime() <= Date.now()) {
+            throw new Error('OTP đã hết hạn, vui lòng gửi lại mã mới');
+        }
+
+        const incomingHash = hashOtp(code);
+        if (!otpHashesEqual(otp.code_hash, incomingHash)) {
+            throw new Error('OTP không chính xác');
+        }
+
+        await otpRepository.markConsumed(otp.id);
+        return {
+            verified: true,
+            email: normalizedEmail,
+            verified_at: new Date().toISOString(),
+            user_id: otp.user_id,
+            purpose: otp.purpose
+        };
     },
 
     async verifyOtp(email, code) {
@@ -189,7 +276,9 @@ const otpService = {
             user_id: otp.user_id,
             purpose: otp.purpose
         };
-    }
+    },
+
+    OTP_PURPOSE_PASSWORD_RESET
 };
 
 module.exports = otpService;
