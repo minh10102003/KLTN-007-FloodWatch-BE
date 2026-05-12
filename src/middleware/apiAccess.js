@@ -37,6 +37,7 @@ function isGuestReadableGet(path) {
         '/api/v1/fusion',
         '/api/v1/research',
         '/api/v1/routing/safe-path',
+        '/api/v1/geocode',
         '/api/heatmap',
         '/api/report-evaluations',
         '/api/alerts'

@@ -384,3 +384,19 @@ Tài liệu này đủ để FE kết nối BE cho các function Admin đã làm
 **FE:** sau redirect, đọc `window.location.hash` (parse query-style), lưu token giống login thường, rồi `history.replaceState` bỏ hash nếu cần.
 
 **Biến môi trường BE:** xem `.env.example` (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, …).
+
+---
+
+## 7. Gợi ý & tìm địa chỉ (Google Places / Geocoding) — dùng chung cho map / tìm đường
+
+**Base:** `GET {API_BASE}/api/v1/geocode/...` — **không cần JWT** (công khai; có rate limit theo IP).
+
+| Endpoint | Mô tả |
+|----------|--------|
+| `GET /api/v1/geocode/search` | Gợi ý khi gõ: query **`q`** hoặc **`input`** (≥2 ký tự). Tuỳ chọn: `session_token` (UUID, gom billing session Google), `lat`, `lng`, `radius` (mét, bias quanh điểm). |
+| `GET /api/v1/geocode/place` | Sau khi user chọn 1 dòng: **`place_id`** (+ tuỳ chọn `session_token`). Trả `location.lat` / `location.lng`, `formatted_address`. |
+| `GET /api/v1/geocode/forward` | Chuỗi địa chỉ đầy đủ → danh sách kết quả Geocoding (ít “gợi ý theo gõ” hơn Places; dùng khi cần). Query: **`address`**. |
+
+**FE Mapbox:** lấy `lng, lat` từ `/place` → `map.flyTo({ center: [lng, lat], zoom: 16 })`.
+
+**BE env:** `GOOGLE_GEOCODING_API_KEY` và/hoặc `GOOGLE_PLACES_API_KEY` (trên Google Cloud phải bật **Places API** + **Geocoding API** cho key đó). Tuỳ chọn: `GEOCODE_SEARCH_MAX_PER_MINUTE` (mặc định 60).
