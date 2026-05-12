@@ -59,6 +59,13 @@ function isAllowedBySuffix(origin, suffixes) {
 
 const allowedOrigins = parseCsv(process.env.CORS_ALLOWED_ORIGINS);
 const allowedOriginSuffixes = parseCsv(process.env.CORS_ALLOWED_ORIGIN_SUFFIXES);
+/** WebView Capacitor / Ionic — Origin header khi APK gọi API (không phải domain API). */
+const defaultCapacitorOrigins = [
+    'https://localhost',
+    'http://localhost',
+    'capacitor://localhost',
+    'ionic://localhost'
+];
 const defaultDevOrigins = [
     'http://localhost:5173',
     'http://127.0.0.1:5173',
@@ -75,10 +82,12 @@ const defaultProdOrigins = [
     'https://www.floodlight.id.vn'
 ];
 const finalAllowedOrigins = new Set([
+    ...defaultCapacitorOrigins,
     ...defaultDevOrigins,
     ...defaultProdOrigins,
     ...allowedOrigins
 ]);
+const logCorsBlocked = process.env.CORS_LOG_BLOCKED_ORIGINS === 'true';
 const finalAllowedSuffixes = ['.vercel.app', ...allowedOriginSuffixes];
 
 const corsOptions = {
@@ -87,6 +96,9 @@ const corsOptions = {
         if (!origin) return callback(null, true);
         if (finalAllowedOrigins.has(origin)) return callback(null, true);
         if (isAllowedBySuffix(origin, finalAllowedSuffixes)) return callback(null, true);
+        if (logCorsBlocked) {
+            console.warn('[CORS] blocked Origin (thêm vào CORS_ALLOWED_ORIGINS nếu hợp lệ):', origin);
+        }
         return callback(new Error(`CORS blocked for origin: ${origin}`), false);
     },
     credentials: true,
