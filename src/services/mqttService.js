@@ -6,39 +6,8 @@ const alertRepository = require('../repositories/alertRepository');
 const emergencySubscriptionRepository = require('../repositories/emergencySubscriptionRepository');
 const emergencyAlertSendLogRepository = require('../repositories/emergencyAlertSendLogRepository');
 const emergencyNotificationService = require('./emergencyNotificationService');
-
-// Kalman Filter để lọc nhiễu
-class KalmanFilter {
-    constructor(processNoise = 0.01, measurementNoise = 0.25) {
-        this.processNoise = processNoise;
-        this.measurementNoise = measurementNoise;
-        this.estimatedValue = null;
-        this.errorCovariance = 1;
-    }
-
-    filter(measurement) {
-        if (this.estimatedValue === null) {
-            // Khởi tạo với giá trị đo đầu tiên
-            this.estimatedValue = measurement;
-            return measurement;
-        }
-
-        // Prediction step
-        const predictedErrorCovariance = this.errorCovariance + this.processNoise;
-
-        // Update step
-        const kalmanGain = predictedErrorCovariance / (predictedErrorCovariance + this.measurementNoise);
-        this.estimatedValue = this.estimatedValue + kalmanGain * (measurement - this.estimatedValue);
-        this.errorCovariance = (1 - kalmanGain) * predictedErrorCovariance;
-
-        return this.estimatedValue;
-    }
-
-    reset() {
-        this.estimatedValue = null;
-        this.errorCovariance = 1;
-    }
-}
+const { KalmanFilter } = require('./kalmanFilterService');
+const { determineStatusFromLevel } = require('./floodStatusService');
 
 // Lưu trữ Kalman filter cho mỗi sensor
 const kalmanFilters = {};
@@ -125,21 +94,11 @@ const calculateVelocity = async (sensorId, currentWaterLevel) => {
     }
 };
 
-// Hàm xác định trạng thái dựa trên ngưỡng
+// Hàm xác định trạng thái dựa trên ngưỡng (delegates sang helper thuần để dùng chung cho unit test)
 const determineStatus = async (sensorId, waterLevel) => {
     try {
         const thresholds = await sensorRepository.getThresholds(sensorId);
-
-        if (thresholds) {
-            const { warning_threshold, danger_threshold } = thresholds;
-            if (waterLevel >= danger_threshold) return 'danger';
-            if (waterLevel >= warning_threshold) return 'warning';
-            return 'normal';
-        }
-        // Nếu không có ngưỡng, dùng mặc định
-        if (waterLevel >= 30) return 'danger';
-        if (waterLevel >= 10) return 'warning';
-        return 'normal';
+        return determineStatusFromLevel(waterLevel, thresholds || undefined);
     } catch (err) {
         console.error('❌ [Status] Error determining status:', err.message);
         return 'normal';
@@ -285,6 +244,9 @@ const init = () => {
                                 alert_kind: alertKind
                             };
                             for (const subscriber of subscribers) {
+                                const methods = emergencyNotificationService.normalizeMethods(
+                                    subscriber.notification_methods
+                                );
                                 let skipSend = false;
                                 try {
                                     skipSend = await emergencyAlertSendLogRepository.wasSentRecently(
@@ -304,17 +266,27 @@ const init = () => {
                                         skipSend = false;
                                     }
                                 }
-                                if (skipSend) {
+                                const dangerTelegramEveryReading =
+                                    alertKind === 'danger' && methods.includes('telegram');
+                                if (skipSend && !dangerTelegramEveryReading) {
                                     console.log(
                                         `🔁 [Alert] Cooldown skip user=${subscriber.user_id} sensor=${sensor_id} kind=${alertKind} (${cooldownMin}m)`
                                     );
                                     continue;
                                 }
 
-                                const results = await emergencyNotificationService.notifySubscriber(
-                                    subscriber,
-                                    payload
-                                );
+                                const telegramOnlyBypass = skipSend && dangerTelegramEveryReading;
+                                if (telegramOnlyBypass) {
+                                    console.log(
+                                        `📲 [Alert] Danger → gửi Telegram (bỏ qua cooldown ${cooldownMin}m) user=${subscriber.user_id} sensor=${sensor_id}`
+                                    );
+                                }
+
+                                const results = telegramOnlyBypass
+                                    ? await emergencyNotificationService.notifySubscriber(subscriber, payload, {
+                                          channels: ['telegram'],
+                                      })
+                                    : await emergencyNotificationService.notifySubscriber(subscriber, payload);
                                 const successCount = results.filter((r) => r.ok).length;
                                 if (successCount < 1) {
                                     console.warn(
@@ -322,7 +294,7 @@ const init = () => {
                                             .map((r) => `${r.channel}:${r.reason || 'unknown'}`)
                                             .join(' | ')}`
                                     );
-                                } else {
+                                } else if (!telegramOnlyBypass) {
                                     try {
                                         await emergencyAlertSendLogRepository.recordSuccessfulSend(
                                             sensor_id,

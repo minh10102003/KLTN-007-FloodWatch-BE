@@ -128,8 +128,17 @@ async function sendTelegram(payload, { chatId: perUserChatId } = {}) {
 }
 
 const emergencyNotificationService = {
-    async notifySubscriber(subscriber, payload) {
-        const methods = normalizeMethods(subscriber.notification_methods);
+    /**
+     * @param {object} subscriber
+     * @param {object} payload
+     * @param {{ channels?: string[] }} [options] - nếu có `channels` (vd ['telegram']) chỉ gửi các kênh đó (đã giao với notification_methods của user).
+     */
+    async notifySubscriber(subscriber, payload, options = {}) {
+        const all = normalizeMethods(subscriber.notification_methods);
+        const filter = Array.isArray(options.channels) && options.channels.length > 0
+            ? new Set(options.channels.map((c) => String(c || '').trim().toLowerCase()).filter(Boolean))
+            : null;
+        const methods = filter ? all.filter((m) => filter.has(m)) : all;
         const tasks = [];
 
         if (methods.includes('email')) tasks.push(sendEmail(subscriber.email, payload));
@@ -150,3 +159,5 @@ const emergencyNotificationService = {
 };
 
 module.exports = emergencyNotificationService;
+module.exports.buildAlertMessage = buildAlertMessage;
+module.exports.normalizeMethods = normalizeMethods;
