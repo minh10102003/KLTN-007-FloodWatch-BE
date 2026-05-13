@@ -1,5 +1,19 @@
 const BaseRepository = require('./baseRepository');
 
+const subscriptionSelectFields = `
+    id,
+    user_id,
+    ST_X(location::geometry) as lng,
+    ST_Y(location::geometry) as lat,
+    radius,
+    notification_methods,
+    name,
+    display_meta,
+    is_active,
+    created_at,
+    updated_at
+`;
+
 /**
  * Emergency Subscription Repository
  * Chứa tất cả các query liên quan đến đăng ký khẩn
@@ -15,15 +29,25 @@ class EmergencySubscriptionRepository extends BaseRepository {
             lng,
             lat,
             radius = 1000,
-            notification_methods = ['email']
+            notification_methods = ['email'],
+            name = null,
+            display_meta = {},
         } = subscriptionData;
 
         const query = `
-            INSERT INTO emergency_subscriptions (user_id, location, radius, notification_methods)
-            VALUES ($1, ST_SetSRID(ST_MakePoint($2, $3), 4326)::geography, $4, $5)
+            INSERT INTO emergency_subscriptions (user_id, location, radius, notification_methods, name, display_meta)
+            VALUES ($1, ST_SetSRID(ST_MakePoint($2, $3), 4326)::geography, $4, $5, $6, $7::jsonb)
             RETURNING *
         `;
-        return await this.queryOne(query, [user_id, lng, lat, radius, notification_methods]);
+        return await this.queryOne(query, [
+            user_id,
+            lng,
+            lat,
+            radius,
+            notification_methods,
+            name,
+            JSON.stringify(display_meta && typeof display_meta === 'object' ? display_meta : {}),
+        ]);
     }
 
     /**
@@ -32,16 +56,7 @@ class EmergencySubscriptionRepository extends BaseRepository {
      */
     async getSubscriptionsByUser(userId) {
         const query = `
-            SELECT 
-                id,
-                user_id,
-                ST_X(location::geometry) as lng,
-                ST_Y(location::geometry) as lat,
-                radius,
-                notification_methods,
-                is_active,
-                created_at,
-                updated_at
+            SELECT ${subscriptionSelectFields}
             FROM emergency_subscriptions
             WHERE user_id = $1
             ORDER BY created_at DESC
@@ -55,13 +70,7 @@ class EmergencySubscriptionRepository extends BaseRepository {
      * @param {Object} subscriptionData - Dữ liệu cần cập nhật
      */
     async updateSubscription(subscriptionId, subscriptionData) {
-        const {
-            lng,
-            lat,
-            radius,
-            notification_methods,
-            is_active
-        } = subscriptionData;
+        const { lng, lat, radius, notification_methods, is_active, name, display_meta } = subscriptionData;
 
         const updates = [];
         const values = [];
@@ -84,6 +93,14 @@ class EmergencySubscriptionRepository extends BaseRepository {
             updates.push(`is_active = $${paramIndex++}`);
             values.push(is_active);
         }
+        if (name !== undefined) {
+            updates.push(`name = $${paramIndex++}`);
+            values.push(name);
+        }
+        if (display_meta !== undefined) {
+            updates.push(`display_meta = $${paramIndex++}::jsonb`);
+            values.push(JSON.stringify(display_meta && typeof display_meta === 'object' ? display_meta : {}));
+        }
 
         if (updates.length === 0) {
             return await this.getSubscriptionById(subscriptionId);
@@ -92,11 +109,14 @@ class EmergencySubscriptionRepository extends BaseRepository {
         updates.push(`updated_at = CURRENT_TIMESTAMP`);
         values.push(subscriptionId);
 
-        await this.query(`
+        await this.query(
+            `
             UPDATE emergency_subscriptions 
             SET ${updates.join(', ')}
             WHERE id = $${paramIndex}
-        `, values);
+        `,
+            values
+        );
 
         return await this.getSubscriptionById(subscriptionId);
     }
@@ -107,16 +127,7 @@ class EmergencySubscriptionRepository extends BaseRepository {
      */
     async getSubscriptionById(subscriptionId) {
         const query = `
-            SELECT 
-                id,
-                user_id,
-                ST_X(location::geometry) as lng,
-                ST_Y(location::geometry) as lat,
-                radius,
-                notification_methods,
-                is_active,
-                created_at,
-                updated_at
+            SELECT ${subscriptionSelectFields}
             FROM emergency_subscriptions
             WHERE id = $1
         `;
@@ -152,6 +163,7 @@ class EmergencySubscriptionRepository extends BaseRepository {
                 u.telegram_chat_id,
                 u.telegram_username,
                 es.notification_methods,
+                es.name AS subscription_name,
                 ST_Distance(es.location, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography) as distance
             FROM emergency_subscriptions es
             INNER JOIN users u ON es.user_id = u.id
@@ -165,4 +177,3 @@ class EmergencySubscriptionRepository extends BaseRepository {
 }
 
 module.exports = new EmergencySubscriptionRepository();
-

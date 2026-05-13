@@ -25,6 +25,7 @@
     "migrate:flood-ingest-key": "node scripts/runMigrationFloodLogsIngestKey.js",
     "migrate:emergency-alert-send-log": "node scripts/runMigrationEmergencyAlertSendLog.js",
     "migrate:telegram-per-user": "node scripts/runMigrationTelegramPerUser.js",
+    "migrate:emergency-subscription-name": "node scripts/runMigrationEmergencySubscriptionName.js",
     "migrate:road-graph": "node scripts/runMigrationRoadGraphTables.js",
     "railway:migrate-road-graph": "railway run npm run migrate:road-graph",
     "import:road-graph": "node scripts/importRoadGraph.js",

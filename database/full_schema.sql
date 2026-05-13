@@ -154,6 +154,8 @@ CREATE TABLE emergency_subscriptions (
     location GEOGRAPHY(Point, 4326) NOT NULL,
     radius INTEGER DEFAULT 1000,
     notification_methods VARCHAR(50)[] DEFAULT ARRAY['email', 'sms'],
+    name VARCHAR(200),
+    display_meta JSONB NOT NULL DEFAULT '{}'::jsonb,
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

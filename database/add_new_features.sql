@@ -63,6 +63,10 @@ CREATE TABLE IF NOT EXISTS emergency_subscriptions (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+ALTER TABLE emergency_subscriptions
+    ADD COLUMN IF NOT EXISTS name VARCHAR(200),
+    ADD COLUMN IF NOT EXISTS display_meta JSONB NOT NULL DEFAULT '{}'::jsonb;
+
 -- 6. Bảng OTA_UPDATES (Quản lý cập nhật OTA)
 CREATE TABLE IF NOT EXISTS ota_updates (
     id SERIAL PRIMARY KEY,

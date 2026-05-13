@@ -43,6 +43,15 @@ const { authenticate } = require('../middleware/auth');
  *                   enum: [email, webhook, telegram, sms, push]
  *                 default: [email]
  *                 example: [email, webhook]
+ *               name:
+ *                 type: string
+ *                 maxLength: 200
+ *                 nullable: true
+ *                 description: Tên hiển thị do user đặt (FE getSubscriptionDisplayName)
+ *               display_meta:
+ *                 type: object
+ *                 additionalProperties: true
+ *                 description: JSON mở rộng cho FE (icon, màu, …). Có thể gửi displayMeta (camelCase).
  *     responses:
  *       201:
  *         description: Đăng ký thành công
@@ -87,6 +96,12 @@ router.post('/', authenticate, emergencySubscriptionController.createSubscriptio
  *                         type: array
  *                         items:
  *                           type: string
+ *                       name:
+ *                         type: string
+ *                         nullable: true
+ *                       display_meta:
+ *                         type: object
+ *                         additionalProperties: true
  *                       is_active:
  *                         type: boolean
  */
@@ -139,6 +154,15 @@ router.get('/my-subscriptions', authenticate, emergencySubscriptionController.ge
  *                 type: boolean
  *                 example: true
  *                 description: Kích hoạt/vô hiệu hóa subscription
+ *               name:
+ *                 type: string
+ *                 maxLength: 200
+ *                 nullable: true
+ *                 description: Đổi tên hiển thị (gửi null hoặc chuỗi rỗng sau trim → lưu null)
+ *               display_meta:
+ *                 type: object
+ *                 additionalProperties: true
+ *                 description: Ghi đè metadata hiển thị (có thể gửi displayMeta)
  *     responses:
  *       200:
  *         description: Cập nhật thành công
@@ -166,6 +190,11 @@ router.get('/my-subscriptions', authenticate, emergencySubscriptionController.ge
  *                       type: integer
  *                     notification_methods:
  *                       type: array
+ *                     name:
+ *                       type: string
+ *                       nullable: true
+ *                     display_meta:
+ *                       type: object
  *                     is_active:
  *                       type: boolean
  *       404:
