@@ -22,6 +22,8 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
  *               - username
  *               - email
  *               - password
+ *               - full_name
+ *               - phone
  *             properties:
  *               username:
  *                 type: string
@@ -37,9 +39,11 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
  *               full_name:
  *                 type: string
  *                 example: Nguyễn Văn A
+ *                 description: Họ tên thật (bắt buộc, validate định dạng)
  *               phone:
  *                 type: string
- *                 example: 0123456789
+ *                 example: "0912345678"
+ *                 description: Số di động VN (bắt buộc, dạng 0[35789]xxxxxxxx hoặc +84…)
  *     responses:
  *       201:
  *         description: Đăng ký thành công
@@ -511,7 +515,10 @@ router.get('/profile-icons', authenticate, authController.getProfileIcons);
  * /api/auth/profile/edit:
  *   put:
  *     summary: Cập nhật profile user
- *     description: Sửa một phần hoặc toàn bộ các field được phép. `GET /api/auth/profile` chỉ đọc.
+ *     description: |
+ *       Mỗi lần gọi phải gửi **đủ** `full_name` (hoặc `fullName`), `email`, `phone` (đều bắt buộc, validate chặt).
+ *       `avatar` tuỳ chọn (chỉ giá trị từ `GET /api/auth/profile-icons`). Email không được trùng user khác.
+ *       Lỗi 400 có thể kèm `details` object theo từng field.
  *     tags: [Authentication]
  *     security:
  *       - bearerAuth: []
@@ -520,7 +527,13 @@ router.get('/profile-icons', authenticate, authController.getProfileIcons);
  *         application/json:
  *           schema:
  *             type: object
+ *             required:
+ *               - email
+ *               - phone
  *             properties:
+ *               fullName:
+ *                 type: string
+ *                 description: Thay thế cho full_name (camelCase) nếu FE dùng
  *               full_name:
  *                 type: string
  *                 example: Nguyễn Văn B
@@ -652,14 +665,14 @@ router.get('/users', authenticate, requireAdmin, authController.getAllUsers);
  *         application/json:
  *           schema:
  *             type: object
- *             required: [username, email, password, role]
+ *             required: [username, email, password, role, full_name, phone]
  *             properties:
  *               username: { type: string, example: mod01 }
  *               email: { type: string, format: email, example: mod01@hcmflood.vn }
  *               password: { type: string, format: password, example: SecurePass123 }
  *               role: { type: string, enum: [user, moderator, admin], example: moderator }
- *               full_name: { type: string, example: Moderator One }
- *               phone: { type: string }
+ *               full_name: { type: string, example: Moderator One, description: Họ tên thật (validate) }
+ *               phone: { type: string, example: "0912345678", description: Di động VN (validate) }
  *     responses:
  *       201:
  *         description: "Tạo tài khoản thành công (data: user, không trả token)"

@@ -113,12 +113,29 @@ class UserRepository extends BaseRepository {
     }
 
     /**
+     * Email (chuẩn hóa lowercase) đã được user khác dùng? (dùng khi đổi email profile).
+     */
+    async isEmailUsedByOther(email, excludeUserId) {
+        const row = await this.queryOne(
+            `
+            SELECT id FROM users
+            WHERE LOWER(TRIM(email)) = LOWER(TRIM($1::text))
+              AND id <> $2
+            LIMIT 1
+            `,
+            [email, excludeUserId]
+        );
+        return !!row;
+    }
+
+    /**
      * Tìm user theo ID
      * @param {number} userId - User ID
      */
     async findById(userId) {
         const query = `
-            SELECT id, username, email, full_name, phone, role, is_active, last_login, created_at, avatar, email_verified_at,
+            SELECT id, username, email, full_name, phone, role, is_active, is_online, last_login, created_at, updated_at,
+                   avatar, email_verified_at,
                    last_known_lat, last_known_lng, last_location_accuracy_m, last_location_at,
                    telegram_chat_id, telegram_username
             FROM users

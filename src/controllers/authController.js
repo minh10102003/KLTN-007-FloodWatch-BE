@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const userModel = require('../models/userModel');
 const otpService = require('../services/otpService');
+const userContactValidation = require('../utils/userContactValidation');
 
 /** Danh sách icon profile được phép (chỉ chọn từ folder public/profile-icons) */
 function getAllowedProfileIcons() {
@@ -32,13 +33,36 @@ const authController = {
                     error: 'Thiếu thông tin bắt buộc: username, email, password'
                 });
             }
+            if (full_name === undefined || full_name === null || String(full_name).trim() === '') {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Thiếu họ và tên (full_name).',
+                    details: { full_name: 'Bắt buộc.' }
+                });
+            }
+            if (phone === undefined || phone === null || String(phone).trim() === '') {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Thiếu số điện thoại (phone).',
+                    details: { phone: 'Bắt buộc.' }
+                });
+            }
+
+            const core = userContactValidation.validateUserCoreContact({ full_name, email, phone });
+            if (!core.ok) {
+                return res.status(400).json({
+                    success: false,
+                    error: core.error,
+                    details: core.details
+                });
+            }
 
             const result = await userModel.register({
                 username,
-                email,
+                email: core.values.email,
                 password,
-                full_name,
-                phone
+                full_name: core.values.full_name,
+                phone: core.values.phone
             });
 
             res.status(201).json({
@@ -202,10 +226,53 @@ const authController = {
         }
     },
 
-    // Cập nhật profile (full_name, phone, email, avatar). Avatar chỉ được chọn từ danh sách icon có sẵn.
+    // Cập nhật profile: mỗi lần gửi đủ full_name (hoặc fullName), email, phone; avatar tuỳ chọn.
     updateProfile: async (req, res) => {
         try {
             const body = { ...req.body };
+            const hasName = body.full_name !== undefined || body.fullName !== undefined;
+            const hasEmail = body.email !== undefined;
+            const hasPhone = body.phone !== undefined;
+            if (!hasName || !hasEmail || !hasPhone) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Cần gửi đủ full_name (hoặc fullName), email, phone mỗi lần cập nhật profile.',
+                    details: {
+                        ...(!hasName ? { full_name: 'Bắt buộc.' } : {}),
+                        ...(!hasEmail ? { email: 'Bắt buộc.' } : {}),
+                        ...(!hasPhone ? { phone: 'Bắt buộc.' } : {})
+                    }
+                });
+            }
+
+            const rawName = body.full_name !== undefined ? body.full_name : body.fullName;
+            const core = userContactValidation.validateUserCoreContact({
+                full_name: rawName,
+                email: body.email,
+                phone: body.phone
+            });
+            if (!core.ok) {
+                return res.status(400).json({
+                    success: false,
+                    error: core.error,
+                    details: core.details
+                });
+            }
+
+            const taken = await userModel.isEmailUsedByOther(core.values.email, req.user.id);
+            if (taken) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Email này đã được tài khoản khác sử dụng.',
+                    details: { email: 'Trùng email.' }
+                });
+            }
+
+            const payload = {
+                full_name: core.values.full_name,
+                email: core.values.email,
+                phone: core.values.phone
+            };
             if (body.avatar !== undefined) {
                 const allowed = getAllowedProfileIcons();
                 if (!allowed.includes(body.avatar)) {
@@ -214,14 +281,30 @@ const authController = {
                         error: 'Ảnh đại diện không hợp lệ. Chỉ được chọn từ danh sách icon có sẵn.'
                     });
                 }
+                payload.avatar = body.avatar;
             }
-            const user = await userModel.updateProfile(req.user.id, body);
+
+            await userModel.updateProfile(req.user.id, payload);
+            const fresh = await userModel.getUserById(req.user.id);
+            if (!fresh) {
+                return res.status(500).json({
+                    success: false,
+                    error: 'Không đọc lại được dữ liệu user sau khi cập nhật'
+                });
+            }
             res.json({
                 success: true,
                 message: 'Cập nhật profile thành công',
-                data: toPublicProfileUser(user)
+                data: toPublicProfileUser(fresh)
             });
         } catch (err) {
+            if (err.code === '23505') {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Email đã tồn tại hoặc vi phạm ràng buộc duy nhất.',
+                    details: { email: 'Trùng hoặc không hợp lệ.' }
+                });
+            }
             res.status(500).json({
                 success: false,
                 error: err.message
@@ -441,12 +524,36 @@ const authController = {
                     error: 'Thiếu thông tin bắt buộc: username, email, password, role'
                 });
             }
+            if (full_name === undefined || full_name === null || String(full_name).trim() === '') {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Thiếu họ và tên (full_name).',
+                    details: { full_name: 'Bắt buộc.' }
+                });
+            }
+            if (phone === undefined || phone === null || String(phone).trim() === '') {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Thiếu số điện thoại (phone).',
+                    details: { phone: 'Bắt buộc.' }
+                });
+            }
+
+            const core = userContactValidation.validateUserCoreContact({ full_name, email, phone });
+            if (!core.ok) {
+                return res.status(400).json({
+                    success: false,
+                    error: core.error,
+                    details: core.details
+                });
+            }
+
             const user = await userModel.createUserByAdmin({
                 username,
-                email,
+                email: core.values.email,
                 password,
-                full_name,
-                phone,
+                full_name: core.values.full_name,
+                phone: core.values.phone,
                 role
             });
             const auditLogRepository = require('../repositories/auditLogRepository');
@@ -457,7 +564,19 @@ const authController = {
                 data: user
             });
         } catch (err) {
-            const status = err.message.includes('đã tồn tại') || err.message.includes('Role không hợp lệ') ? 400 : 500;
+            if (err.code === '23505') {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Email hoặc dữ liệu trùng ràng buộc duy nhất trên hệ thống.',
+                    details: { email: 'Có thể trùng email.' }
+                });
+            }
+            const status =
+                err.message.includes('đã tồn tại') ||
+                err.message.includes('Role không hợp lệ') ||
+                err.message.includes('Thiếu')
+                    ? 400
+                    : 500;
             res.status(status).json({
                 success: false,
                 error: err.message

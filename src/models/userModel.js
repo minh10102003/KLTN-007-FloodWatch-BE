@@ -274,6 +274,11 @@ const userModel = {
         return await userRepository.findById(userId);
     },
 
+    /** Email đã tồn tại ở user khác (đổi email profile). */
+    async isEmailUsedByOther(email, excludeUserId) {
+        return userRepository.isEmailUsedByOther(email, excludeUserId);
+    },
+
     /**
      * Cập nhật profile
      */

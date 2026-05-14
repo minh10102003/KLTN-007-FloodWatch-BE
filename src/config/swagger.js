@@ -90,6 +90,8 @@ const options = {
                         phone: { type: 'string', example: '0123456789' },
                         role: { type: 'string', enum: ['user', 'admin', 'moderator'], example: 'user' },
                         is_active: { type: 'boolean', example: true },
+                        is_online: { type: 'boolean', example: false, description: 'Đang có phiên đăng nhập (heartbeat)' },
+                        avatar: { type: 'string', nullable: true, description: 'Tên file trong /profile-icons' },
                         last_login: { type: 'string', format: 'date-time' },
                         email_verified_at: {
                             type: 'string',
@@ -123,7 +125,12 @@ const options = {
                             nullable: true,
                             description: '@username Telegram nếu có'
                         },
-                        created_at: { type: 'string', format: 'date-time' }
+                        created_at: { type: 'string', format: 'date-time' },
+                        updated_at: {
+                            type: 'string',
+                            format: 'date-time',
+                            description: 'Cập nhật bản ghi user gần nhất (sau PUT profile/edit phản ánh DB)'
+                        }
                     }
                 },
                 Sensor: {
