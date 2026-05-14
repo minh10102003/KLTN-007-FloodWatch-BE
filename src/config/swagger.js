@@ -316,6 +316,10 @@ const options = {
             {
                 name: 'Energy Monitoring',
                 description: 'APIs theo dõi năng lượng sensors'
+            },
+            {
+                name: 'News',
+                description: 'Tin RSS thời sự lọc theo từ khóa ngập nước / thời tiết (public)'
             }
         ]
     },

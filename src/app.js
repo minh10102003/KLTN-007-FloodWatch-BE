@@ -26,6 +26,7 @@ const auditLogRoutes = require('./routes/auditLogRoutes');
 const accessLogMiddleware = require('./middleware/accessLogMiddleware');
 const googleAuthRoutes = require('./routes/googleAuthRoutes');
 const geocodeRoutes = require('./routes/geocodeRoutes');
+const newsRoutes = require('./routes/newsRoutes');
 const path = require('path');
 
 const app = express();
@@ -128,6 +129,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api', telegramRoutes);
 app.use('/api/v1/auth', googleAuthRoutes);
 app.use('/api/v1/geocode', geocodeRoutes);
+app.use('/api/news', newsRoutes);
 
 // ==========================================
 // 2. GLOBAL API ACCESS (đọc công khai / optional Bearer → apiAccess)

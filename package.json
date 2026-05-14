@@ -55,6 +55,7 @@
     "multer": "^2.1.1",
     "pg": "^8.17.2",
     "resend": "^6.10.0",
+    "fast-xml-parser": "^4.5.3",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1"
   }
