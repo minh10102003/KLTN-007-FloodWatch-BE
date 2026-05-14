@@ -93,7 +93,7 @@ Tài liệu map **role** với **route API** theo đặc tả phân quyền hệ
 
 | Method | Route | Mô tả |
 |--------|--------|--------|
-| PUT | `/api/auth/profile` | Cập nhật profile |
+| PUT | `/api/auth/profile/edit` | Cập nhật profile |
 | PUT | `/api/auth/change-password` | Đổi mật khẩu |
 | GET | `/api/auth/profile` | Xem profile |
 | POST | `/api/auth/logout` | Đăng xuất |

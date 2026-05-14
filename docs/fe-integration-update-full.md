@@ -117,7 +117,7 @@ Hệ quả UI: đoạn **xa trạm** có thể có `flood_depth_cm = 0` dù vẫ
 | GET | `/api/auth/telegram/status` | `telegram_linked`, `telegram_username` |
 | DELETE | `/api/auth/telegram/unlink` | Gỡ liên kết |
 
-**Profile** (`GET` user / `PUT` profile): không expose `telegram_chat_id`; dùng `telegram_linked` để bật/tắt kênh Telegram trong subscription.
+**Profile** (`GET /api/auth/profile` / `PUT /api/auth/profile/edit`): không expose `telegram_chat_id`; dùng `telegram_linked` để bật/tắt kênh Telegram trong subscription.
 
 ---
 

@@ -377,7 +377,8 @@ router.post('/logout', authenticate, authController.logout);
  * @swagger
  * /api/auth/profile:
  *   get:
- *     summary: Lấy thông tin profile của user hiện tại
+ *     summary: Lấy thông tin profile (chỉ đọc)
+ *     description: Chỉ trả dữ liệu user. Để sửa profile dùng `PUT /api/auth/profile/edit`.
  *     tags: [Authentication]
  *     security:
  *       - bearerAuth: []
@@ -507,9 +508,10 @@ router.get('/profile-icons', authenticate, authController.getProfileIcons);
 
 /**
  * @swagger
- * /api/auth/profile:
+ * /api/auth/profile/edit:
  *   put:
- *     summary: Cập nhật profile
+ *     summary: Cập nhật profile user
+ *     description: Sửa một phần hoặc toàn bộ các field được phép. `GET /api/auth/profile` chỉ đọc.
  *     tags: [Authentication]
  *     security:
  *       - bearerAuth: []
@@ -559,7 +561,7 @@ router.get('/profile-icons', authenticate, authController.getProfileIcons);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.put('/profile', authenticate, authController.updateProfile);
+router.put('/profile/edit', authenticate, authController.updateProfile);
 
 /**
  * @swagger
