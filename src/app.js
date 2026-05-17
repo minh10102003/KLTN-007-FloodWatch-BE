@@ -131,6 +131,7 @@ app.use('/api/v1/auth', googleAuthRoutes);
 app.use('/api/v1/geocode', geocodeRoutes);
 app.use('/api/news', newsRoutes);
 app.use('/api/v1/news', newsRoutes);
+app.use('/api', weatherRoutes);
 
 // ==========================================
 // 2. GLOBAL API ACCESS (đọc công khai / optional Bearer → apiAccess)
@@ -144,7 +145,6 @@ app.use('/api', floodRoutes);
 app.use('/api', fusionRoutes);
 app.use('/api', forecastRoutes);
 app.use('/api', routingRoutes);
-app.use('/api', weatherRoutes);
 app.use('/api', deviceHealthRoutes);
 app.use('/api', emergencyAlertAdminRoutes);
 app.use('/api', researchRoutes);

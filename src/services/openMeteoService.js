@@ -65,7 +65,74 @@ function getUpstreamForecastDays(requestedDays) {
 }
 
 function getCacheTtlMs() {
-    return Math.max(60_000, (parseInt(process.env.WEATHER_CACHE_SECONDS, 10) || 1800) * 1000);
+    return Math.max(60_000, (parseInt(process.env.WEATHER_CACHE_SECONDS, 10) || 7200) * 1000);
+}
+
+function getOpenMeteoBaseUrl() {
+    const raw = (process.env.OPEN_METEO_BASE_URL || 'https://api.open-meteo.com').replace(/\/$/, '');
+    return raw;
+}
+
+let upstreamBlockedUntil = 0;
+
+function getCooldownMs() {
+    return Math.max(60_000, (parseInt(process.env.WEATHER_COOLDOWN_SECONDS, 10) || 600) * 1000);
+}
+
+function isUpstreamBlocked() {
+    return Date.now() < upstreamBlockedUntil;
+}
+
+function blockUpstream() {
+    upstreamBlockedUntil = Date.now() + getCooldownMs();
+}
+
+/** Dữ liệu tối thiểu để FE không 502 khi Open-Meteo 429 (TP.HCM mặc định). */
+function buildBuiltinFallback(latitude, longitude, forecastDaysRequested) {
+    const now = new Date();
+    const hourlyTimes = [];
+    const hourlyTemp = [];
+    const hourlyPop = [];
+    for (let i = 0; i < 8; i++) {
+        const t = new Date(now.getTime() + i * 3600_000);
+        hourlyTimes.push(t.toISOString());
+        hourlyTemp.push(28);
+        hourlyPop.push(40);
+    }
+    return {
+        cached: false,
+        stale: true,
+        degraded: true,
+        fallback: true,
+        forecast_days_requested: forecastDaysRequested,
+        forecast_days_fetched: 0,
+        source: 'fallback',
+        source_url: 'https://open-meteo.com/',
+        attribution:
+            'Dữ liệu thời tiết tạm thời (Open-Meteo đang giới hạn tần suất). Sẽ tự cập nhật khi có thể.',
+        coordinates_used: { latitude, longitude },
+        timezone: 'Asia/Ho_Chi_Minh',
+        current: {
+            time: now.toISOString(),
+            temperature_2m: 28,
+            relative_humidity_2m: 75,
+            weather_code: 2,
+            wind_speed_10m: 12,
+            is_day: 1
+        },
+        hourly_units: {
+            time: 'iso8601',
+            temperature_2m: '°C',
+            precipitation_probability: '%'
+        },
+        hourly: {
+            time: hourlyTimes,
+            temperature_2m: hourlyTemp,
+            precipitation_probability: hourlyPop
+        },
+        daily_units: null,
+        daily: null
+    };
 }
 
 /** Cho phép trả cache cũ khi Open-Meteo 429/5xx (mặc định 24h). */
@@ -167,7 +234,7 @@ async function httpsGetJsonWithRetry(urlString) {
 }
 
 function buildOpenMeteoUrl(latitude, longitude, forecastDays) {
-    const u = new URL('https://api.open-meteo.com/v1/forecast');
+    const u = new URL(`${getOpenMeteoBaseUrl()}/v1/forecast`);
     u.searchParams.set('latitude', String(latitude));
     u.searchParams.set('longitude', String(longitude));
     u.searchParams.set('timezone', 'Asia/Ho_Chi_Minh');
@@ -180,6 +247,10 @@ function buildOpenMeteoUrl(latitude, longitude, forecastDays) {
         'temperature_2m,relative_humidity_2m,precipitation_probability,precipitation,rain,weather_code,cloud_cover,wind_speed_10m'
     );
     u.searchParams.set('forecast_days', String(forecastDays));
+    const apiKey = process.env.OPEN_METEO_API_KEY;
+    if (apiKey) {
+        u.searchParams.set('apikey', apiKey);
+    }
     return u.toString();
 }
 
@@ -229,24 +300,38 @@ async function fetchUpstream(latitude, longitude, forecastDaysRequested) {
         return { ...shared, cached: true, forecast_days_requested: forecastDaysRequested };
     }
 
+    const resolveDegraded = (fromExactKey = true) => {
+        const staleHit = findStalePayload(cacheKey, latitude, longitude);
+        if (staleHit) {
+            return wrapCachedPayload(
+                {
+                    ...staleHit.entry.data,
+                    forecast_days_requested: forecastDaysRequested,
+                    degraded: true
+                },
+                { stale: true, fromExactKey: staleHit.fromExactKey }
+            );
+        }
+        const fallback = buildBuiltinFallback(latitude, longitude, forecastDaysRequested);
+        writeCacheEntry(cacheKey, fallback);
+        return fallback;
+    };
+
     const work = (async () => {
+        if (isUpstreamBlocked()) {
+            return resolveDegraded();
+        }
+
         let raw;
         try {
             raw = await httpsGetJsonWithRetry(
                 buildOpenMeteoUrl(latitude, longitude, forecastDaysFetched)
             );
         } catch (err) {
-            const staleHit = findStalePayload(cacheKey, latitude, longitude);
-            if (staleHit) {
-                return wrapCachedPayload(
-                    {
-                        ...staleHit.entry.data,
-                        forecast_days_requested: forecastDaysRequested
-                    },
-                    { stale: true, fromExactKey: staleHit.fromExactKey }
-                );
+            if (err.statusCode === 429) {
+                blockUpstream();
             }
-            throw err;
+            return resolveDegraded();
         }
 
         const payload = rawToPayload(
@@ -257,6 +342,7 @@ async function fetchUpstream(latitude, longitude, forecastDaysRequested) {
             forecastDaysRequested
         );
         writeCacheEntry(cacheKey, payload);
+        upstreamBlockedUntil = 0;
         return payload;
     })();
 
@@ -274,6 +360,18 @@ async function fetchForecast(opts) {
     return fetchUpstream(latitude, longitude, forecastDays);
 }
 
+/** Gọi khi server start + sau deploy để có cache/fallback sẵn. */
+async function warmCache() {
+    const { latitude, longitude } = readDefaultCoords();
+    const cacheKey = coordCacheKey(latitude, longitude);
+    if (readCacheEntry(cacheKey)) return;
+    try {
+        await fetchUpstream(latitude, longitude, 3);
+    } catch {
+        writeCacheEntry(cacheKey, buildBuiltinFallback(latitude, longitude, 3));
+    }
+}
+
 module.exports = {
     DEFAULT_HCM_LAT,
     DEFAULT_HCM_LON,
@@ -282,5 +380,6 @@ module.exports = {
     HCM_BOUNDS,
     readDefaultCoords,
     isInsideHcmBounds,
-    fetchForecast
+    fetchForecast,
+    warmCache
 };

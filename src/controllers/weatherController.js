@@ -60,9 +60,10 @@ const weatherController = {
                 }
             });
         } catch (err) {
-            res.status(502).json({
+            console.error('[weather]', err.message);
+            res.status(503).json({
                 success: false,
-                error: err.message || 'Không lấy được dữ liệu Open-Meteo'
+                error: err.message || 'Không lấy được dữ liệu thời tiết'
             });
         }
     }
