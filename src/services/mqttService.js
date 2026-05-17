@@ -8,6 +8,7 @@ const emergencyAlertSendLogRepository = require('../repositories/emergencyAlertS
 const emergencyNotificationService = require('./emergencyNotificationService');
 const { KalmanFilter } = require('./kalmanFilterService');
 const { determineStatusFromLevel } = require('./floodStatusService');
+const { emitAdminNotification } = require('../socket/adminSocket');
 
 // Lưu trữ Kalman filter cho mỗi sensor
 const kalmanFilters = {};
@@ -131,6 +132,12 @@ const checkSensorHealth = async () => {
         
         if (result.length > 0) {
             console.log(`⚠️ [Health Check] ${result.length} sensor(s) marked as offline`);
+            for (const row of result) {
+                const sensorId = row.sensor_id ?? row.sensorId;
+                if (sensorId) {
+                    emitAdminNotification({ type: 'sensor_offline', sensorId });
+                }
+            }
         }
     } catch (err) {
         console.error('❌ [Health Check] Error:', err.message);

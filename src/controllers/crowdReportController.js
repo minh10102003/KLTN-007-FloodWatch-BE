@@ -2,6 +2,7 @@ const crowdReportModel = require('../models/crowdReportModel');
 const userModel = require('../models/userModel');
 const { withFullPhotoUrls } = require('../utils/photoUrl');
 const { withReportConfidence } = require('../utils/reportConfidence');
+const { emitAdminNotification } = require('../socket/adminSocket');
 
 const crowdReportController = {
     // Lấy các báo cáo từ người dân trong vòng 24 giờ qua (photo_url trả full URL)
@@ -112,6 +113,11 @@ const crowdReportController = {
                 urlsArray.length > 0 ? urlsArray : null
             );
             
+            emitAdminNotification({
+                type: 'report_pending',
+                reportId: result.id
+            });
+
             let message = "Cảm ơn bạn đã báo cáo!";
             if (result.verified_by_sensor) {
                 message = "Báo cáo của bạn đã được xác minh bởi hệ thống cảm biến. Cảm ơn!";

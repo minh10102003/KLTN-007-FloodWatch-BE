@@ -2,6 +2,7 @@ const crowdReportRepository = require('../repositories/crowdReportRepository');
 const userModel = require('../models/userModel');
 const { withFullPhotoUrls } = require('../utils/photoUrl');
 const { withReportConfidence } = require('../utils/reportConfidence');
+const { emitAdminNotification } = require('../socket/adminSocket');
 
 const reportModerationController = {
     // Lấy tất cả báo cáo (kể cả cũ) - Admin/Moderator, không giới hạn theo thời gian
@@ -97,6 +98,12 @@ const reportModerationController = {
             }
 
             console.log(`✅ [Moderation] Report ${reportIdNum} updated to ${moderationStatus} by ${req.user.username}`);
+
+            if (action === 'approve') {
+                emitAdminNotification({ type: 'report_approved', reportId: reportIdNum });
+            } else {
+                emitAdminNotification({ type: 'report_rejected', reportId: reportIdNum });
+            }
 
             res.json({
                 success: true,

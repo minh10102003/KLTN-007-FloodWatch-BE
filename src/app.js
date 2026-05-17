@@ -28,80 +28,19 @@ const googleAuthRoutes = require('./routes/googleAuthRoutes');
 const geocodeRoutes = require('./routes/geocodeRoutes');
 const newsRoutes = require('./routes/newsRoutes');
 const path = require('path');
+const { createCorsOriginCallback } = require('./config/corsAllowedOrigins');
+const { emitAdminNotification } = require('./socket/adminSocket');
+const { authenticate, requireAdminOrModerator } = require('./middleware/auth');
 
 const app = express();
 
-// Trust reverse proxy headers on Railway by default.
+// Trust reverse proxy headers on Render (reverse proxy) by default.
 if (process.env.TRUST_PROXY !== 'false') {
     app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS || 1) || 1);
 }
 
-function parseCsv(raw) {
-    if (!raw || typeof raw !== 'string') return [];
-    return raw
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean);
-}
-
-function isAllowedBySuffix(origin, suffixes) {
-    try {
-        const host = new URL(origin).hostname.toLowerCase();
-        return suffixes.some((suffix) => {
-            const s = String(suffix || '').toLowerCase();
-            if (!s) return false;
-            if (s.startsWith('.')) return host.endsWith(s);
-            return host === s || host.endsWith(`.${s}`);
-        });
-    } catch {
-        return false;
-    }
-}
-
-const allowedOrigins = parseCsv(process.env.CORS_ALLOWED_ORIGINS);
-const allowedOriginSuffixes = parseCsv(process.env.CORS_ALLOWED_ORIGIN_SUFFIXES);
-/** WebView Capacitor / Ionic — Origin header khi APK gọi API (không phải domain API). */
-const defaultCapacitorOrigins = [
-    'https://localhost',
-    'http://localhost',
-    'capacitor://localhost',
-    'ionic://localhost'
-];
-const defaultDevOrigins = [
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
-    'http://localhost:5174',
-    'http://127.0.0.1:5174',
-    'http://localhost:3000',
-    'http://127.0.0.1:3000'
-];
-const defaultProdOrigins = [
-    'https://floodsight.id.vn',
-    'https://www.floodsight.id.vn',
-    'https://admin.floodsight.id.vn',
-    'https://floodlight.id.vn',
-    'https://www.floodlight.id.vn'
-];
-const finalAllowedOrigins = new Set([
-    ...defaultCapacitorOrigins,
-    ...defaultDevOrigins,
-    ...defaultProdOrigins,
-    ...allowedOrigins
-]);
-const logCorsBlocked = process.env.CORS_LOG_BLOCKED_ORIGINS === 'true';
-const finalAllowedSuffixes = ['.vercel.app', ...allowedOriginSuffixes];
-
 const corsOptions = {
-    origin(origin, callback) {
-        // Non-browser clients (curl/postman) may not send Origin header.
-        if (!origin) return callback(null, true);
-        if (finalAllowedOrigins.has(origin)) return callback(null, true);
-        if (isAllowedBySuffix(origin, finalAllowedSuffixes)) return callback(null, true);
-        if (logCorsBlocked) {
-            console.warn('[CORS] blocked Origin (thêm vào CORS_ALLOWED_ORIGINS nếu hợp lệ):', origin);
-        }
-        return callback(new Error(`CORS blocked for origin: ${origin}`), false);
-    },
+    origin: createCorsOriginCallback(),
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
@@ -160,5 +99,22 @@ app.use('/api/ota', otaRoutes);
 app.use('/api/energy', energyRoutes);
 app.use('/api', statsRoutes);
 app.use('/api', uploadRoutes);
+
+if (process.env.SOCKET_DEV_TEST_ROUTE === 'true') {
+    app.post(
+        '/api/dev/test-notification',
+        authenticate,
+        requireAdminOrModerator,
+        (req, res) => {
+            const { type, reportId, sensorId } = req.body || {};
+            emitAdminNotification({
+                type: type || 'report_pending',
+                reportId: reportId != null ? Number(reportId) : 1,
+                sensorId
+            });
+            res.json({ ok: true });
+        }
+    );
+}
 
 module.exports = app;
