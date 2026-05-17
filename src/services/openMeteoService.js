@@ -47,6 +47,22 @@ function isInsideHcmBounds(lat, lon) {
 
 /** @type {Map<string, { ts: number, data: object }>} */
 const cacheByKey = new Map();
+/** @type {Map<string, Promise<object>>} */
+const inFlightByCoord = new Map();
+
+function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function coordCacheKey(latitude, longitude) {
+    return `${latitude.toFixed(5)}_${longitude.toFixed(5)}`;
+}
+
+function getUpstreamForecastDays(requestedDays) {
+    const envDays = parseInt(process.env.WEATHER_FETCH_DAYS, 10);
+    const base = Number.isFinite(envDays) ? Math.min(7, Math.max(1, envDays)) : 3;
+    return Math.min(7, Math.max(requestedDays, base));
+}
 
 function getCacheTtlMs() {
     return Math.max(60_000, (parseInt(process.env.WEATHER_CACHE_SECONDS, 10) || 1800) * 1000);
@@ -98,7 +114,7 @@ function wrapCachedPayload(data, { stale = false, fromExactKey = true } = {}) {
     };
 }
 
-function httpsGetJson(urlString) {
+function httpsGetJsonOnce(urlString) {
     return new Promise((resolve, reject) => {
         const req = https.get(
             urlString,
@@ -113,7 +129,9 @@ function httpsGetJson(urlString) {
                 });
                 res.on('end', () => {
                     if (res.statusCode !== 200) {
-                        reject(new Error(`Open-Meteo trả HTTP ${res.statusCode}`));
+                        const err = new Error(`Open-Meteo trả HTTP ${res.statusCode}`);
+                        err.statusCode = res.statusCode;
+                        reject(err);
                         return;
                     }
                     try {
@@ -132,13 +150,23 @@ function httpsGetJson(urlString) {
     });
 }
 
-/**
- * @param {{ latitude: number, longitude: number, forecastDays?: number }} opts
- */
-async function fetchForecast(opts) {
-    const { latitude, longitude } = opts;
-    const forecastDays = Math.min(7, Math.max(1, parseInt(opts.forecastDays, 10) || 3));
+async function httpsGetJsonWithRetry(urlString) {
+    const maxAttempts = Math.min(5, Math.max(1, parseInt(process.env.WEATHER_RETRY_ATTEMPTS, 10) || 4));
+    let lastErr;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+            return await httpsGetJsonOnce(urlString);
+        } catch (err) {
+            lastErr = err;
+            const retryable = err.statusCode === 429 || err.statusCode >= 500;
+            if (!retryable || attempt === maxAttempts) break;
+            await sleep(Math.min(10_000, 750 * 2 ** (attempt - 1)));
+        }
+    }
+    throw lastErr;
+}
 
+function buildOpenMeteoUrl(latitude, longitude, forecastDays) {
     const u = new URL('https://api.open-meteo.com/v1/forecast');
     u.searchParams.set('latitude', String(latitude));
     u.searchParams.set('longitude', String(longitude));
@@ -152,32 +180,15 @@ async function fetchForecast(opts) {
         'temperature_2m,relative_humidity_2m,precipitation_probability,precipitation,rain,weather_code,cloud_cover,wind_speed_10m'
     );
     u.searchParams.set('forecast_days', String(forecastDays));
+    return u.toString();
+}
 
-    const cacheKey = `${latitude.toFixed(5)}_${longitude.toFixed(5)}_${forecastDays}`;
-    const cacheTtlMs = getCacheTtlMs();
-    const now = Date.now();
-    const fresh = readCacheEntry(cacheKey);
-    if (fresh && now - fresh.ts < cacheTtlMs) {
-        return wrapCachedPayload(fresh.data, { stale: false, fromExactKey: true });
-    }
-
-    let raw;
-    try {
-        raw = await httpsGetJson(u.toString());
-    } catch (err) {
-        const staleHit = findStalePayload(cacheKey, latitude, longitude);
-        if (staleHit) {
-            return wrapCachedPayload(staleHit.entry.data, {
-                stale: true,
-                fromExactKey: staleHit.fromExactKey
-            });
-        }
-        throw err;
-    }
-
-    const payload = {
+function rawToPayload(raw, latitude, longitude, forecastDaysFetched, forecastDaysRequested) {
+    return {
         cached: false,
         stale: false,
+        forecast_days_requested: forecastDaysRequested,
+        forecast_days_fetched: forecastDaysFetched,
         source: 'open-meteo',
         source_url: 'https://open-meteo.com/',
         attribution:
@@ -190,9 +201,77 @@ async function fetchForecast(opts) {
         daily_units: raw.daily_units || null,
         daily: raw.daily || null
     };
+}
 
-    writeCacheEntry(cacheKey, payload);
-    return payload;
+/**
+ * @param {{ latitude: number, longitude: number, forecastDays?: number }} opts
+ */
+async function fetchUpstream(latitude, longitude, forecastDaysRequested) {
+    const forecastDaysFetched = getUpstreamForecastDays(forecastDaysRequested);
+    const cacheKey = coordCacheKey(latitude, longitude);
+    const cacheTtlMs = getCacheTtlMs();
+    const now = Date.now();
+    const fresh = readCacheEntry(cacheKey);
+    if (
+        fresh &&
+        now - fresh.ts < cacheTtlMs &&
+        (fresh.data?.forecast_days_fetched || 0) >= forecastDaysRequested
+    ) {
+        return wrapCachedPayload(
+            { ...fresh.data, forecast_days_requested: forecastDaysRequested },
+            { stale: false, fromExactKey: true }
+        );
+    }
+
+    const existing = inFlightByCoord.get(cacheKey);
+    if (existing) {
+        const shared = await existing;
+        return { ...shared, cached: true, forecast_days_requested: forecastDaysRequested };
+    }
+
+    const work = (async () => {
+        let raw;
+        try {
+            raw = await httpsGetJsonWithRetry(
+                buildOpenMeteoUrl(latitude, longitude, forecastDaysFetched)
+            );
+        } catch (err) {
+            const staleHit = findStalePayload(cacheKey, latitude, longitude);
+            if (staleHit) {
+                return wrapCachedPayload(
+                    {
+                        ...staleHit.entry.data,
+                        forecast_days_requested: forecastDaysRequested
+                    },
+                    { stale: true, fromExactKey: staleHit.fromExactKey }
+                );
+            }
+            throw err;
+        }
+
+        const payload = rawToPayload(
+            raw,
+            latitude,
+            longitude,
+            forecastDaysFetched,
+            forecastDaysRequested
+        );
+        writeCacheEntry(cacheKey, payload);
+        return payload;
+    })();
+
+    inFlightByCoord.set(cacheKey, work);
+    try {
+        return await work;
+    } finally {
+        inFlightByCoord.delete(cacheKey);
+    }
+}
+
+async function fetchForecast(opts) {
+    const { latitude, longitude } = opts;
+    const forecastDays = Math.min(7, Math.max(1, parseInt(opts.forecastDays, 10) || 3));
+    return fetchUpstream(latitude, longitude, forecastDays);
 }
 
 module.exports = {

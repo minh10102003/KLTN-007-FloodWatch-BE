@@ -7,7 +7,13 @@ const newsController = {
         try {
             const articles = await newsFeedService.getFloodRelatedNews();
             res.setHeader('Cache-Control', `public, max-age=${CACHE_MAX_AGE}, s-maxage=${CACHE_MAX_AGE}`);
-            res.json({ success: true, data: articles });
+            // data: mảng bài (chuẩn). articles/items: alias cho FE đọc nhầm path.
+            res.json({
+                success: true,
+                data: articles,
+                articles,
+                items: articles
+            });
         } catch (err) {
             console.error('[news]', err.message);
             res.status(500).json({ success: false, error: 'Không thể tải tin tức.', data: [] });
