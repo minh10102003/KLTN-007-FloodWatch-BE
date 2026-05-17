@@ -2,7 +2,9 @@
 
 Endpoint public trên backend Express — client (web/mobile) gọi trực tiếp; CORS theo `CORS_ALLOWED_ORIGINS` / suffix mặc định trong `src/app.js`.
 
-## `GET /api/news`
+## `GET /api/news` hoặc `GET /api/v1/news/hcm`
+
+Hai URL trả cùng dữ liệu (alias cho client cũ gọi `/api/v1/news/hcm`).
 
 - **Auth:** không cần JWT (mount trong khối public, trước `apiAccess`).
 - **Rate limit:** mặc định 120 request/phút/IP (tối thiểu 20); chỉnh `NEWS_API_MAX_PER_MINUTE`.

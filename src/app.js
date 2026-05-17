@@ -130,6 +130,7 @@ app.use('/api', telegramRoutes);
 app.use('/api/v1/auth', googleAuthRoutes);
 app.use('/api/v1/geocode', geocodeRoutes);
 app.use('/api/news', newsRoutes);
+app.use('/api/v1/news', newsRoutes);
 
 // ==========================================
 // 2. GLOBAL API ACCESS (đọc công khai / optional Bearer → apiAccess)

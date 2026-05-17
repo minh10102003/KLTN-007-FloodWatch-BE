@@ -28,6 +28,9 @@ function isGuestReadableGet(path) {
     if (path.startsWith('/api/crowd-reports/all')) return false;
     if (path === '/api/crowd-reports' || path.startsWith('/api/crowd-reports/')) return true;
 
+    if (path === '/api/news' || path.startsWith('/api/news/')) return true;
+    if (path === '/api/v1/news' || path.startsWith('/api/v1/news/')) return true;
+
     const prefixes = [
         '/api/v1/flood-data',
         '/api/flood-data',

@@ -45,11 +45,57 @@ function isInsideHcmBounds(lat, lon) {
     );
 }
 
-let cacheEntry = null;
-let cacheTtlMs = Math.max(60_000, (parseInt(process.env.WEATHER_CACHE_SECONDS, 10) || 600) * 1000);
+/** @type {Map<string, { ts: number, data: object }>} */
+const cacheByKey = new Map();
 
 function getCacheTtlMs() {
-    return Math.max(60_000, (parseInt(process.env.WEATHER_CACHE_SECONDS, 10) || 600) * 1000);
+    return Math.max(60_000, (parseInt(process.env.WEATHER_CACHE_SECONDS, 10) || 1800) * 1000);
+}
+
+/** Cho phép trả cache cũ khi Open-Meteo 429/5xx (mặc định 24h). */
+function getStaleMaxMs() {
+    const sec = parseInt(process.env.WEATHER_STALE_MAX_SECONDS, 10);
+    if (Number.isFinite(sec) && sec > 0) return sec * 1000;
+    return 86_400_000;
+}
+
+function readCacheEntry(key) {
+    return cacheByKey.get(key) || null;
+}
+
+function writeCacheEntry(key, data) {
+    cacheByKey.set(key, { ts: Date.now(), data });
+}
+
+function findStalePayload(cacheKey, latitude, longitude) {
+    const now = Date.now();
+    const staleMaxMs = getStaleMaxMs();
+    const exact = readCacheEntry(cacheKey);
+    if (exact && now - exact.ts < staleMaxMs) {
+        return { entry: exact, fromExactKey: true };
+    }
+    for (const [key, entry] of cacheByKey) {
+        if (key === cacheKey) continue;
+        if (now - entry.ts >= staleMaxMs) continue;
+        const coords = entry.data?.coordinates_used;
+        if (
+            coords &&
+            Math.abs(coords.latitude - latitude) < 0.0001 &&
+            Math.abs(coords.longitude - longitude) < 0.0001
+        ) {
+            return { entry, fromExactKey: false };
+        }
+    }
+    return null;
+}
+
+function wrapCachedPayload(data, { stale = false, fromExactKey = true } = {}) {
+    return {
+        ...data,
+        cached: true,
+        stale,
+        stale_from_exact_key: fromExactKey
+    };
 }
 
 function httpsGetJson(urlString) {
@@ -108,16 +154,30 @@ async function fetchForecast(opts) {
     u.searchParams.set('forecast_days', String(forecastDays));
 
     const cacheKey = `${latitude.toFixed(5)}_${longitude.toFixed(5)}_${forecastDays}`;
-    cacheTtlMs = getCacheTtlMs();
+    const cacheTtlMs = getCacheTtlMs();
     const now = Date.now();
-    if (cacheEntry && cacheEntry.key === cacheKey && now - cacheEntry.ts < cacheTtlMs) {
-        return { ...cacheEntry.data, cached: true };
+    const fresh = readCacheEntry(cacheKey);
+    if (fresh && now - fresh.ts < cacheTtlMs) {
+        return wrapCachedPayload(fresh.data, { stale: false, fromExactKey: true });
     }
 
-    const raw = await httpsGetJson(u.toString());
+    let raw;
+    try {
+        raw = await httpsGetJson(u.toString());
+    } catch (err) {
+        const staleHit = findStalePayload(cacheKey, latitude, longitude);
+        if (staleHit) {
+            return wrapCachedPayload(staleHit.entry.data, {
+                stale: true,
+                fromExactKey: staleHit.fromExactKey
+            });
+        }
+        throw err;
+    }
 
     const payload = {
         cached: false,
+        stale: false,
         source: 'open-meteo',
         source_url: 'https://open-meteo.com/',
         attribution:
@@ -131,7 +191,7 @@ async function fetchForecast(opts) {
         daily: raw.daily || null
     };
 
-    cacheEntry = { key: cacheKey, ts: now, data: payload };
+    writeCacheEntry(cacheKey, payload);
     return payload;
 }
 

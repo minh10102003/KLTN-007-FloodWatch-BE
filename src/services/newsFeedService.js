@@ -40,7 +40,7 @@ function matchesKeyword(text) {
     return KEYWORDS.some((k) => t.includes(k.toLowerCase()));
 }
 
-function normalizeItems(raw, source) {
+function normalizeItems(raw, source, { requireKeyword = true } = {}) {
     if (raw == null) return [];
     const items = Array.isArray(raw) ? raw : [raw];
     const out = [];
@@ -58,13 +58,13 @@ function normalizeItems(raw, source) {
         const pubDate = coerceText(pubRaw).trim();
         const descText = stripCDATA(coerceText(descRaw));
         if (!title || !link) continue;
-        if (!matchesKeyword(`${title} ${descText}`)) continue;
+        if (requireKeyword && !matchesKeyword(`${title} ${descText}`)) continue;
         out.push({ title, link, pubDate, source });
     }
     return out;
 }
 
-function parseRssXml(xml, source) {
+function parseRssXml(xml, source, opts) {
     const parser = new XMLParser({
         ignoreAttributes: false,
         trimValues: false,
@@ -79,7 +79,7 @@ function parseRssXml(xml, source) {
     const rss = root.rss ?? root.Rss;
     const channel = rss && typeof rss === 'object' ? rss.channel : undefined;
     if (!channel || typeof channel !== 'object') return [];
-    return normalizeItems(channel.item, source);
+    return normalizeItems(channel.item, source, opts);
 }
 
 function parsePubDate(d) {
@@ -87,7 +87,7 @@ function parsePubDate(d) {
     return Number.isFinite(t) ? t : 0;
 }
 
-async function fetchOne(feed) {
+async function fetchOne(feed, { requireKeyword = true } = {}) {
     try {
         const res = await fetch(feed.url, {
             headers: {
@@ -98,21 +98,25 @@ async function fetchOne(feed) {
         });
         if (!res.ok) return [];
         const xml = await res.text();
-        return parseRssXml(xml, feed.label);
+        return parseRssXml(xml, feed.label, { requireKeyword });
     } catch {
         return [];
     }
 }
 
-/**
- * @returns {Promise<Array<{ title: string, link: string, pubDate: string, source: string }>>}
- */
-async function getFloodRelatedNews() {
-    const settled = await Promise.allSettled(FEEDS.map((f) => fetchOne(f)));
-    const merged = [];
-    for (const s of settled) {
-        if (s.status === 'fulfilled') merged.push(...s.value);
-    }
+let cacheEntry = null;
+
+function getCacheTtlMs() {
+    return Math.max(60_000, (parseInt(process.env.NEWS_CACHE_SECONDS, 10) || 900) * 1000);
+}
+
+function getStaleMaxMs() {
+    const sec = parseInt(process.env.NEWS_STALE_MAX_SECONDS, 10);
+    if (Number.isFinite(sec) && sec > 0) return sec * 1000;
+    return 86_400_000;
+}
+
+function dedupeAndLimit(merged, limit = 15) {
     merged.sort((a, b) => parsePubDate(b.pubDate) - parsePubDate(a.pubDate));
     const seen = new Set();
     const unique = [];
@@ -121,9 +125,45 @@ async function getFloodRelatedNews() {
         if (seen.has(k)) continue;
         seen.add(k);
         unique.push(a);
-        if (unique.length >= 15) break;
+        if (unique.length >= limit) break;
     }
     return unique;
+}
+
+async function fetchAllFeeds({ requireKeyword = true } = {}) {
+    const settled = await Promise.allSettled(FEEDS.map((f) => fetchOne(f, { requireKeyword })));
+    const merged = [];
+    for (const s of settled) {
+        if (s.status === 'fulfilled') merged.push(...s.value);
+    }
+    return merged;
+}
+
+/**
+ * @returns {Promise<Array<{ title: string, link: string, pubDate: string, source: string }>>}
+ */
+async function getFloodRelatedNews() {
+    const now = Date.now();
+    const cacheTtlMs = getCacheTtlMs();
+    if (cacheEntry && now - cacheEntry.ts < cacheTtlMs) {
+        return cacheEntry.articles;
+    }
+
+    try {
+        const filtered = dedupeAndLimit(await fetchAllFeeds());
+        let articles = filtered;
+        if (articles.length === 0) {
+            const relaxed = dedupeAndLimit(await fetchAllFeeds({ requireKeyword: false }), 10);
+            if (relaxed.length > 0) articles = relaxed;
+        }
+        cacheEntry = { ts: now, articles };
+        return articles;
+    } catch (err) {
+        if (cacheEntry && now - cacheEntry.ts < getStaleMaxMs()) {
+            return cacheEntry.articles;
+        }
+        throw err;
+    }
 }
 
 module.exports = {

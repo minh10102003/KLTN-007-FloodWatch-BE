@@ -15,6 +15,7 @@ const newsLimiter = rateLimit({
 /**
  * @swagger
  * /api/news:
+ * /api/v1/news/hcm:
  *   get:
  *     summary: Tin RSS thời sự liên quan ngập nước / thời tiết TP.HCM (public)
  *     tags: [News]
@@ -41,5 +42,7 @@ const newsLimiter = rateLimit({
  *                       source: { type: string, example: VnExpress }
  */
 router.get('/', newsLimiter, newsController.getNews);
+/** Alias cho client gọi `/api/v1/news/hcm` (cùng dữ liệu với GET /api/news). */
+router.get('/hcm', newsLimiter, newsController.getNews);
 
 module.exports = router;
