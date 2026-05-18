@@ -1,7 +1,6 @@
 /**
  * Origin công khai để ghép URL ảnh (/uploads/...).
- * Ưu tiên PUBLIC_BASE_URL hoặc UPLOADS_PUBLIC_ORIGIN (không slash cuối) — dùng khi CDN/proxy khác host.
- * Nếu không set: lấy từ request (cần trust proxy đằng sau Railway/nginx để https đúng).
+ * Ưu tiên PUBLIC_BASE_URL hoặc UPLOADS_PUBLIC_ORIGIN (không slash cuối).
  */
 function getPublicBase(req) {
     const envBase = process.env.PUBLIC_BASE_URL || process.env.UPLOADS_PUBLIC_ORIGIN;
@@ -14,43 +13,95 @@ function getPublicBase(req) {
 }
 
 /**
- * Chuẩn hóa photo_url thành full URL để FE dùng trực tiếp <img src="..." />
- * Tránh lỗi 404 khi FE và API khác domain (browser request ảnh từ domain FE thay vì API).
- * @param {object} req - Express request (dùng req.protocol, req.get('host'))
- * @param {string|null} photoUrl - Giá trị photo_url từ DB (có thể relative /uploads/xxx hoặc đã full URL)
- * @returns {string|null} Full URL hoặc null
+ * @param {unknown} raw — JSONB / string / array từ pg
+ * @returns {string[]}
  */
-function toFullPhotoUrl(req, photoUrl) {
-    if (!photoUrl || typeof photoUrl !== 'string') return photoUrl || null;
-    if (photoUrl.startsWith('http://') || photoUrl.startsWith('https://')) return photoUrl;
-    const base = getPublicBase(req);
-    return base + (photoUrl.startsWith('/') ? photoUrl : '/' + photoUrl);
+function normalizePhotoUrlsList(raw) {
+    if (raw == null) return [];
+    if (Array.isArray(raw)) {
+        return raw.filter((u) => u != null && String(u).trim()).map((u) => String(u).trim());
+    }
+    if (typeof raw === 'string') {
+        const s = raw.trim();
+        if (!s) return [];
+        if (s.startsWith('[')) {
+            try {
+                const parsed = JSON.parse(s);
+                return Array.isArray(parsed)
+                    ? parsed.filter((u) => u != null && String(u).trim()).map((u) => String(u).trim())
+                    : [];
+            } catch {
+                return [s];
+            }
+        }
+        return [s];
+    }
+    return [];
 }
 
 /**
- * Chuẩn hóa một URL (relative → full).
+ * Luôn trỏ /uploads/* về PUBLIC_BASE_URL (sửa URL dev/Render nội bộ lưu trong DB).
  */
 function toFullUrl(base, url) {
-    if (!url || typeof url !== 'string') return url || null;
-    if (url.startsWith('http://') || url.startsWith('https://')) return url;
-    return base + (url.startsWith('/') ? url : '/' + url);
+    if (!url || typeof url !== 'string') return null;
+    const trimmed = url.trim();
+    if (!trimmed) return null;
+
+    if (trimmed.startsWith('/uploads/')) {
+        return base + trimmed;
+    }
+
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+        try {
+            const u = new URL(trimmed);
+            if (u.pathname.startsWith('/uploads/')) {
+                return base + u.pathname;
+            }
+        } catch {
+            return trimmed;
+        }
+        return trimmed;
+    }
+
+    if (trimmed.startsWith('uploads/')) {
+        return `${base}/${trimmed}`;
+    }
+
+    return base + (trimmed.startsWith('/') ? trimmed : `/${trimmed}`);
+}
+
+function toFullPhotoUrl(req, photoUrl) {
+    if (!photoUrl || typeof photoUrl !== 'string') return photoUrl || null;
+    return toFullUrl(getPublicBase(req), photoUrl);
 }
 
 /**
- * Gán lại photo_url và photo_urls (full URL) cho một report hoặc mảng reports (không mutate bản gốc).
+ * Gán photo_url + photo_urls (full URL) cho report / mảng reports.
  */
 function withFullPhotoUrls(req, data) {
     if (!data) return data;
     const base = getPublicBase(req);
     const mapOne = (r) => {
         if (!r) return r;
-        const fullPhotoUrl = toFullUrl(base, r.photo_url) || r.photo_url;
-        const fullPhotoUrls = Array.isArray(r.photo_urls) && r.photo_urls.length > 0
-            ? r.photo_urls.map(u => toFullUrl(base, u))
-            : (r.photo_urls || []);
-        return { ...r, photo_url: fullPhotoUrl, photo_urls: fullPhotoUrls };
+        const urls = normalizePhotoUrlsList(r.photo_urls);
+        const mappedUrls = urls.map((u) => toFullUrl(base, u)).filter(Boolean);
+        let fullPhotoUrl = toFullUrl(base, r.photo_url);
+        if (!fullPhotoUrl && mappedUrls.length > 0) {
+            fullPhotoUrl = mappedUrls[0];
+        }
+        return {
+            ...r,
+            photo_url: fullPhotoUrl || null,
+            photo_urls: mappedUrls.length > 0 ? mappedUrls : fullPhotoUrl ? [fullPhotoUrl] : []
+        };
     };
     return Array.isArray(data) ? data.map(mapOne) : mapOne(data);
 }
 
-module.exports = { toFullPhotoUrl, withFullPhotoUrls, getPublicBase };
+module.exports = {
+    toFullPhotoUrl,
+    withFullPhotoUrls,
+    getPublicBase,
+    toFullUrl,
+    normalizePhotoUrlsList
+};

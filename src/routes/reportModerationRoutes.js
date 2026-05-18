@@ -81,7 +81,7 @@ router.get('/all', authenticate, requireAdminOrModerator, reportModerationContro
  *       403:
  *         description: Chỉ moderator hoặc admin mới có quyền
  */
-router.get('/pending', authenticate, requireModerator, reportModerationController.getPendingReports);
+router.get('/pending', authenticate, requireAdminOrModerator, reportModerationController.getPendingReports);
 
 /**
  * @swagger
