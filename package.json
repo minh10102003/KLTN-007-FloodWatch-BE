@@ -44,6 +44,7 @@
     "db:build-neon-import": "node scripts/buildNeonImportDump.js",
     "db:import-neon": "node scripts/importNeonDump.js",
     "db:neon-stats": "node scripts/neonDbStats.js",
+    "db:retention": "node scripts/runDataRetention.js",
     "start:python": "cd python_routing && python main.py",
     "start:all": "npx -y concurrently \"npm start\" \"npm run start:python\"",
     "start:railway": "node scripts/railway-start.js",

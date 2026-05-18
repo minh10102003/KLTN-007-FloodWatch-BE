@@ -4,6 +4,7 @@ const http = require('http');
 const app = require('./src/app');
 const mqttService = require('./src/services/mqttService');
 const openMeteoService = require('./src/services/openMeteoService');
+const { startScheduledRetention } = require('./src/services/dataRetentionService');
 
 const { attachSocketIo } = require('./src/config/socketIo');
 
@@ -14,6 +15,7 @@ attachSocketIo(server);
 
 // Khởi tạo kết nối MQTT để hứng dữ liệu từ Cloud/Mạch thực tế
 mqttService.init();
+startScheduledRetention();
 
 server.listen(PORT, () => {
     console.log(`
