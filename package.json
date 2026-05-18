@@ -4,6 +4,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "start:render": "node server.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "migrate": "node scripts/runMigration.js",
     "migrate:is-online": "node scripts/runMigrationIsOnline.js",
