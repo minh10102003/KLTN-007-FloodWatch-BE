@@ -2,6 +2,33 @@ const BaseRepository = require('./baseRepository');
 const sensorRepository = require('./sensorRepository');
 const userRepository = require('./userRepository');
 
+/** SELECT chuẩn + tên người kiểm duyệt (users.full_name hoặc username). */
+const CROWD_REPORT_SELECT = `
+    cr.id,
+    cr.reporter_name,
+    cr.reporter_id,
+    cr.flood_level,
+    cr.reliability_score,
+    cr.validation_status,
+    cr.verified_by_sensor,
+    cr.photo_url,
+    cr.content,
+    cr.photo_urls,
+    cr.moderation_status,
+    cr.moderated_by,
+    NULLIF(TRIM(COALESCE(mod.full_name, mod.username)), '') AS moderated_by_name,
+    cr.moderated_at,
+    cr.rejection_reason,
+    ST_X(cr.location::geometry) AS lng,
+    ST_Y(cr.location::geometry) AS lat,
+    cr.created_at
+`;
+
+const CROWD_REPORT_FROM = `
+    FROM crowd_reports cr
+    LEFT JOIN users mod ON mod.id = cr.moderated_by
+`;
+
 /**
  * Crowd Report Repository
  * Chứa tất cả các query liên quan đến crowd_reports
@@ -12,41 +39,24 @@ class CrowdReportRepository extends BaseRepository {
      */
     async getRecentReports(hours = 24, moderationStatus = null, validationStatus = null) {
         let query = `
-            SELECT 
-                id,
-                reporter_name,
-                reporter_id,
-                flood_level,
-                reliability_score,
-                validation_status,
-                verified_by_sensor,
-                photo_url,
-                content,
-                photo_urls,
-                moderation_status,
-                moderated_by,
-                moderated_at,
-                rejection_reason,
-                ST_X(location::geometry) as lng, 
-                ST_Y(location::geometry) as lat, 
-                created_at 
-            FROM crowd_reports 
-            WHERE created_at > NOW() - INTERVAL '${hours} hours'
+            SELECT ${CROWD_REPORT_SELECT}
+            ${CROWD_REPORT_FROM}
+            WHERE cr.created_at > NOW() - INTERVAL '${hours} hours'
         `;
         const params = [];
         let paramIndex = 1;
 
         if (moderationStatus) {
-            query += ` AND moderation_status = $${paramIndex++}`;
+            query += ` AND cr.moderation_status = $${paramIndex++}`;
             params.push(moderationStatus);
         }
 
         if (validationStatus) {
-            query += ` AND validation_status = $${paramIndex++}`;
+            query += ` AND cr.validation_status = $${paramIndex++}`;
             params.push(validationStatus);
         }
 
-        query += ` ORDER BY created_at DESC`;
+        query += ` ORDER BY cr.created_at DESC`;
         return await this.queryAll(query, params);
     }
 
@@ -57,36 +67,19 @@ class CrowdReportRepository extends BaseRepository {
      */
     async getAllReports(limit = 100, moderationStatus = null) {
         let query = `
-            SELECT 
-                id,
-                reporter_name,
-                reporter_id,
-                flood_level,
-                reliability_score,
-                validation_status,
-                verified_by_sensor,
-                photo_url,
-                content,
-                photo_urls,
-                moderation_status,
-                moderated_by,
-                moderated_at,
-                rejection_reason,
-                ST_X(location::geometry) as lng, 
-                ST_Y(location::geometry) as lat, 
-                created_at 
-            FROM crowd_reports 
+            SELECT ${CROWD_REPORT_SELECT}
+            ${CROWD_REPORT_FROM}
             WHERE 1=1
         `;
         const params = [];
         let paramIndex = 1;
 
         if (moderationStatus) {
-            query += ` AND moderation_status = $${paramIndex++}`;
+            query += ` AND cr.moderation_status = $${paramIndex++}`;
             params.push(moderationStatus);
         }
 
-        query += ` ORDER BY created_at DESC LIMIT $${paramIndex++}`;
+        query += ` ORDER BY cr.created_at DESC LIMIT $${paramIndex++}`;
         params.push(limit);
 
         return await this.queryAll(query, params);
@@ -120,26 +113,9 @@ class CrowdReportRepository extends BaseRepository {
      */
     async getReportById(reportId) {
         const query = `
-            SELECT 
-                id,
-                reporter_name,
-                reporter_id,
-                flood_level,
-                reliability_score,
-                validation_status,
-                verified_by_sensor,
-                photo_url,
-                content,
-                photo_urls,
-                moderation_status,
-                moderated_by,
-                moderated_at,
-                rejection_reason,
-                ST_X(location::geometry) as lng, 
-                ST_Y(location::geometry) as lat, 
-                created_at
-            FROM crowd_reports
-            WHERE id = $1
+            SELECT ${CROWD_REPORT_SELECT}
+            ${CROWD_REPORT_FROM}
+            WHERE cr.id = $1
         `;
         return await this.queryOne(query, [reportId]);
     }
@@ -162,12 +138,12 @@ class CrowdReportRepository extends BaseRepository {
             RETURNING *
         `;
         const result = await this.queryOne(query, [moderationStatus, moderatorId, rejectionReason, reportId]);
-        
+
         if (!result) {
             throw new Error(`Không tìm thấy báo cáo với ID: ${reportId}`);
         }
-        
-        return result;
+
+        return await this.getReportById(reportId);
     }
 
     /**
@@ -191,24 +167,10 @@ class CrowdReportRepository extends BaseRepository {
      */
     async getPendingModerationReports(limit = 50) {
         const query = `
-            SELECT 
-                id,
-                reporter_name,
-                reporter_id,
-                flood_level,
-                reliability_score,
-                validation_status,
-                verified_by_sensor,
-                photo_url,
-                content,
-                photo_urls,
-                moderation_status,
-                ST_X(location::geometry) as lng, 
-                ST_Y(location::geometry) as lat, 
-                created_at 
-            FROM crowd_reports 
-            WHERE moderation_status = 'pending'
-            ORDER BY created_at DESC
+            SELECT ${CROWD_REPORT_SELECT}
+            ${CROWD_REPORT_FROM}
+            WHERE cr.moderation_status = 'pending'
+            ORDER BY cr.created_at DESC
             LIMIT $1
         `;
         return await this.queryAll(query, [limit]);
@@ -247,36 +209,19 @@ class CrowdReportRepository extends BaseRepository {
         const reporterIdStr = String(userId);
         
         let query = `
-            SELECT 
-                id,
-                reporter_name,
-                reporter_id,
-                flood_level,
-                reliability_score,
-                validation_status,
-                verified_by_sensor,
-                photo_url,
-                content,
-                photo_urls,
-                moderation_status,
-                moderated_by,
-                moderated_at,
-                rejection_reason,
-                ST_X(location::geometry) as lng, 
-                ST_Y(location::geometry) as lat, 
-                created_at 
-            FROM crowd_reports 
-            WHERE reporter_id = $1
+            SELECT ${CROWD_REPORT_SELECT}
+            ${CROWD_REPORT_FROM}
+            WHERE cr.reporter_id = $1
         `;
         const params = [reporterIdStr];
         let paramIndex = 2;
 
         if (moderationStatus) {
-            query += ` AND moderation_status = $${paramIndex++}`;
+            query += ` AND cr.moderation_status = $${paramIndex++}`;
             params.push(moderationStatus);
         }
 
-        query += ` ORDER BY created_at DESC LIMIT $${paramIndex++}`;
+        query += ` ORDER BY cr.created_at DESC LIMIT $${paramIndex++}`;
         params.push(limit);
 
         return await this.queryAll(query, params);

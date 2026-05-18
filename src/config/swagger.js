@@ -194,6 +194,18 @@ const options = {
                         content: { type: 'string', maxLength: 500, description: 'Nội dung mô tả mức độ ngập (tùy chọn)' },
                         photo_urls: { type: 'array', items: { type: 'string' }, description: 'Mảng URL ảnh (tối đa 5)' },
                         moderation_status: { type: 'string', enum: ['pending', 'approved', 'rejected'] },
+                        moderated_by: {
+                            type: 'integer',
+                            nullable: true,
+                            description: 'User id của moderator/admin đã duyệt/từ chối'
+                        },
+                        moderated_by_name: {
+                            type: 'string',
+                            nullable: true,
+                            description: 'Tên hiển thị người duyệt (full_name hoặc username)'
+                        },
+                        moderated_at: { type: 'string', format: 'date-time', nullable: true },
+                        rejection_reason: { type: 'string', nullable: true },
                         lng: { type: 'number', example: 106.721 },
                         lat: { type: 'number', example: 10.798 },
                         created_at: { type: 'string', format: 'date-time' },
