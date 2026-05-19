@@ -46,6 +46,10 @@ router.get('/v1/research/evaluation', researchController.evaluateFusion);
  *         name: report_hours
  *         schema: { type: integer, default: 72, minimum: 1, maximum: 336 }
  *       - in: query
+ *         name: sensor_hours
+ *         schema: { type: integer, default: 6, minimum: 1, maximum: 72 }
+ *         description: Cửa sổ flood_logs — chỉ sensor có log trong khoảng này được tính (cùng D1)
+ *       - in: query
  *         name: no_sensor_radius_m
  *         schema: { type: integer, default: 1500, minimum: 100, maximum: 10000 }
  *       - in: query
@@ -70,5 +74,27 @@ router.get('/v1/research/evaluation', researchController.evaluateFusion);
  *         description: Tham số bbox không hợp lệ
  */
 router.get('/v1/research/cold-start-hotspots', researchController.getColdStartHotspots);
+
+/**
+ * @swagger
+ * /api/v1/research/cold-start-hotspots/debug:
+ *   get:
+ *     summary: D2 debug — histogram khoảng cách sensor & vì sao hotspot rỗng
+ *     tags: [Research]
+ *     parameters:
+ *       - in: query
+ *         name: report_hours
+ *         schema: { type: integer, default: 72 }
+ *       - in: query
+ *         name: sensor_hours
+ *         schema: { type: integer, default: 6 }
+ *       - in: query
+ *         name: no_sensor_radius_m
+ *         schema: { type: integer, default: 1500 }
+ *     responses:
+ *       200:
+ *         description: Thống kê + histogram
+ */
+router.get('/v1/research/cold-start-hotspots/debug', researchController.getColdStartHotspotsDebug);
 
 module.exports = router;

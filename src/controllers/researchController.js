@@ -36,8 +36,24 @@ const researchController = {
             const bounds = parseBounds(req.query);
             const result = await researchModel.getColdStartHotspots({
                 hours: req.query.report_hours,
+                sensorHours: req.query.sensor_hours,
                 radiusM: req.query.no_sensor_radius_m,
                 minReports: req.query.min_reports,
+                bounds
+            });
+            res.json({ success: true, meta: result.meta, data: result.data });
+        } catch (err) {
+            res.status(err.statusCode || 500).json({ success: false, error: err.message });
+        }
+    },
+
+    getColdStartHotspotsDebug: async (req, res) => {
+        try {
+            const bounds = parseBounds(req.query);
+            const result = await researchModel.getColdStartHotspotsDebug({
+                hours: req.query.report_hours,
+                sensorHours: req.query.sensor_hours,
+                radiusM: req.query.no_sensor_radius_m,
                 bounds
             });
             res.json({ success: true, meta: result.meta, data: result.data });
