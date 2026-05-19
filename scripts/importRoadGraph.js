@@ -12,6 +12,8 @@
 const fs = require('fs');
 const path = require('path');
 const { Pool } = require('pg');
+const { buildPool: poolFromEnv } = require('./dbPoolFromEnv');
+const { parseBbox, DEFAULT_BBOX, segmentInBbox, highwayAllowed, normalizeHighway } = require('./roadGraphFilters');
 require('dotenv').config();
 
 function parseArgs(argv) {
@@ -21,11 +23,19 @@ function parseArgs(argv) {
         defaultSpeedKmh: 35,
         batchSize: 5000,
         lockTimeoutMs: 5000,
-        terminateLockers: false
+        terminateLockers: false,
+        bbox: null,
+        highwayMode: 'open',
     };
     for (let i = 2; i < argv.length; i++) {
         const a = argv[i];
         if (a === '--file') out.file = argv[++i];
+        else if (a === '--bbox') {
+            const b = parseBbox(argv[++i]);
+            if (!b) throw new Error('--bbox cần minLng,minLat,maxLng,maxLat');
+            out.bbox = b;
+        } else if (a === '--bbox-default') out.bbox = DEFAULT_BBOX;
+        else if (a === '--highways') out.highwayMode = String(argv[++i] || 'open').toLowerCase();
         else if (a === '--clear-existing') out.clearExisting = true;
         else if (a === '--default-speed-kmh') out.defaultSpeedKmh = Number(argv[++i]) || 35;
         else if (a === '--batch-size') out.batchSize = Number(argv[++i]) || 5000;
@@ -47,6 +57,9 @@ Usage:
 
 Options:
   --clear-existing            Truncate road_nodes/road_edges trước khi import
+  --bbox minLng,minLat,maxLng,maxLat   Chỉ import segment trong bbox (Neon free)
+  --bbox-default              Bbox mặc định quanh S01–S03 (xem roadGraphFilters.js)
+  --highways major|open|all   Lọc loại đường (default: open — bỏ footway/path/...)
   --default-speed-kmh <n>     Tốc độ mặc định khi thiếu maxspeed/highway (default: 35)
   --batch-size <n>            Cỡ batch insert nodes/edges (default: 5000)
   --lock-timeout-ms <ms>      lock_timeout khi truncate/import (default: 5000)
@@ -80,21 +93,7 @@ function shouldUseSsl(connectionString) {
 }
 
 function buildPool() {
-    const rawUrl = process.env.DATABASE_URL?.trim();
-    if (rawUrl && isValidPostgresUrl(rawUrl)) {
-        const ssl = shouldUseSsl(rawUrl);
-        return new Pool({
-            connectionString: rawUrl,
-            ...(ssl ? { ssl: { rejectUnauthorized: false } } : {})
-        });
-    }
-    return new Pool({
-        user: process.env.DB_USER,
-        host: process.env.DB_HOST,
-        database: process.env.DB_NAME,
-        password: process.env.DB_PASS,
-        port: process.env.DB_PORT
-    });
+    return poolFromEnv();
 }
 
 function speedFromHighway(highway, fallbackKmh) {
@@ -163,14 +162,17 @@ function isMainLyChinhThangCarriagewayName(name) {
     return s === 'Lý Chính Thắng' || s === 'Đường Lý Chính Thắng';
 }
 
-function parseGeoJson(content, defaultSpeedKmh) {
+function parseGeoJson(content, defaultSpeedKmh, filterOpts = {}) {
     const obj = JSON.parse(content);
     const features = Array.isArray(obj.features) ? obj.features : [];
     const segments = [];
+    const { bbox, highwayMode } = filterOpts;
     for (const f of features) {
         const geom = f?.geometry;
         if (!geom) continue;
         const props = f.properties || {};
+        const hw = normalizeHighway(props);
+        if (highwayMode && !highwayAllowed(hw, highwayMode)) continue;
         const otherTags = parseOtherTags(props.other_tags);
         const speedKmh = parseMaxspeedToKmh(
             props.maxspeed || pickTag(otherTags, 'maxspeed'),
@@ -204,9 +206,12 @@ function parseGeoJson(content, defaultSpeedKmh) {
                 const [lng1, lat1] = coords[i - 1];
                 const [lng2, lat2] = coords[i];
                 if (![lng1, lat1, lng2, lat2].every(Number.isFinite)) continue;
+                const from = { lng: Number(lng1), lat: Number(lat1) };
+                const to = { lng: Number(lng2), lat: Number(lat2) };
+                if (bbox && !segmentInBbox(from, to, bbox)) continue;
                 segments.push({
-                    from: { lng: Number(lng1), lat: Number(lat1) },
-                    to: { lng: Number(lng2), lat: Number(lat2) },
+                    from,
+                    to,
                     speedLimitMps: toMps(speedKmh),
                     isBidirectional: bidirectional,
                     oneway,
@@ -526,7 +531,10 @@ async function run() {
     const raw = fs.readFileSync(filePath, 'utf8');
     let segments = [];
     if (ext === '.geojson' || ext === '.json') {
-        segments = parseGeoJson(raw, args.defaultSpeedKmh);
+        segments = parseGeoJson(raw, args.defaultSpeedKmh, {
+            bbox: args.bbox,
+            highwayMode: args.highwayMode,
+        });
     } else if (ext === '.osm' || ext === '.xml') {
         segments = parseOsmXml(raw, args.defaultSpeedKmh);
     } else {

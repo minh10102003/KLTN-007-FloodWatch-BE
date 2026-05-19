@@ -1,25 +1,28 @@
 const fs = require('fs');
 const path = require('path');
-const { Pool } = require('pg');
-require('dotenv').config();
+const { buildPool } = require('./dbPoolFromEnv');
 
 /**
  * Script để chạy database migration
  * Sử dụng Node.js thay vì psql command line
  */
 
-const pool = new Pool({
-    user: process.env.DB_USER,
-    host: process.env.DB_HOST,
-    database: process.env.DB_NAME,
-    password: process.env.DB_PASS,
-    port: process.env.DB_PORT,
-});
+const pool = buildPool();
 
 async function runMigration() {
     const client = await pool.connect();
-    
+
     try {
+        const check = await client.query(
+            `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'sensors'`
+        );
+        if (check.rowCount === 0) {
+            console.error(
+                '❌ Chưa có bảng sensors. Chạy schema gốc trước:\n   npm run db:schema\n   rồi npm run migrate'
+            );
+            process.exit(1);
+        }
+
         console.log('🔄 Đang chạy migration...');
         
         const databaseDir = path.join(__dirname, '..', 'database');

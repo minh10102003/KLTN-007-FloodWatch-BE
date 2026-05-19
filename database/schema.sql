@@ -37,47 +37,6 @@ DROP TABLE IF EXISTS users;
 CREATE EXTENSION IF NOT EXISTS postgis;
 
 -- -----------------------------------------------------------------------------
--- PHẦN 3A: BẢNG ROAD GRAPH (PHỤC VỤ AMC-A* TÌM ĐƯỜNG TRÁNH NGẬP)
--- -----------------------------------------------------------------------------
-CREATE TABLE road_nodes (
-    id BIGSERIAL PRIMARY KEY,
-    node_key VARCHAR(100) UNIQUE,
-    location GEOGRAPHY(Point, 4326) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE road_edges (
-    id BIGSERIAL PRIMARY KEY,
-    from_node_id BIGINT NOT NULL REFERENCES road_nodes(id) ON DELETE CASCADE,
-    to_node_id BIGINT NOT NULL REFERENCES road_nodes(id) ON DELETE CASCADE,
-    geom GEOGRAPHY(LineString, 4326) NOT NULL,
-    length_m DOUBLE PRECISION NOT NULL CHECK (length_m > 0),
-    speed_limit_mps DOUBLE PRECISION NOT NULL CHECK (speed_limit_mps > 0),
-    is_bidirectional BOOLEAN NOT NULL DEFAULT TRUE,
-    oneway TEXT,
-    highway TEXT,
-    junction TEXT,
-    motorcar TEXT,
-    motorcycle TEXT,
-    osm_id TEXT,
-    other_tags TEXT,
-    flood_sensor_id VARCHAR(50) REFERENCES sensors(sensor_id) ON DELETE SET NULL,
-    manual_flood_depth_cm DOUBLE PRECISION,
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-COMMENT ON TABLE road_nodes IS 'Nút giao thông cho thuật toán AMC-A*';
-COMMENT ON TABLE road_edges IS 'Cạnh giao thông cho AMC-A* (chiều dài, tốc độ, liên kết sensor ngập)';
-COMMENT ON COLUMN road_edges.flood_sensor_id IS 'Sensor đại diện cạnh để lấy mực nước mới nhất từ flood_logs';
-COMMENT ON COLUMN road_edges.manual_flood_depth_cm IS 'Cho phép ghi đè độ sâu ngập thủ công (cm) khi test';
-
-CREATE INDEX idx_road_nodes_location ON road_nodes USING GIST(location);
-CREATE INDEX idx_road_edges_geom ON road_edges USING GIST(geom);
-CREATE INDEX idx_road_edges_from_to ON road_edges(from_node_id, to_node_id);
-CREATE INDEX idx_road_edges_active ON road_edges(is_active);
-
--- -----------------------------------------------------------------------------
 -- PHẦN 3: BẢNG USERS (QUẢN LÝ TRUY CẬP)
 -- -----------------------------------------------------------------------------
 CREATE TABLE users (
@@ -154,6 +113,47 @@ CREATE TABLE sensors (
 );
 
 COMMENT ON COLUMN sensors.last_calibrated_at IS 'Thời điểm admin thực hiện Calibrate Sensor lần cuối (ghi nhận từ POST /api/sensors/:id/calibrate)';
+
+-- -----------------------------------------------------------------------------
+-- PHẦN 4A: BẢNG ROAD GRAPH (sau sensors — road_edges FK tới sensors)
+-- -----------------------------------------------------------------------------
+CREATE TABLE road_nodes (
+    id BIGSERIAL PRIMARY KEY,
+    node_key VARCHAR(100) UNIQUE,
+    location GEOGRAPHY(Point, 4326) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE road_edges (
+    id BIGSERIAL PRIMARY KEY,
+    from_node_id BIGINT NOT NULL REFERENCES road_nodes(id) ON DELETE CASCADE,
+    to_node_id BIGINT NOT NULL REFERENCES road_nodes(id) ON DELETE CASCADE,
+    geom GEOGRAPHY(LineString, 4326) NOT NULL,
+    length_m DOUBLE PRECISION NOT NULL CHECK (length_m > 0),
+    speed_limit_mps DOUBLE PRECISION NOT NULL CHECK (speed_limit_mps > 0),
+    is_bidirectional BOOLEAN NOT NULL DEFAULT TRUE,
+    oneway TEXT,
+    highway TEXT,
+    junction TEXT,
+    motorcar TEXT,
+    motorcycle TEXT,
+    osm_id TEXT,
+    other_tags TEXT,
+    flood_sensor_id VARCHAR(50) REFERENCES sensors(sensor_id) ON DELETE SET NULL,
+    manual_flood_depth_cm DOUBLE PRECISION,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE road_nodes IS 'Nút giao thông cho thuật toán AMC-A*';
+COMMENT ON TABLE road_edges IS 'Cạnh giao thông cho AMC-A* (chiều dài, tốc độ, liên kết sensor ngập)';
+COMMENT ON COLUMN road_edges.flood_sensor_id IS 'Sensor đại diện cạnh để lấy mực nước mới nhất từ flood_logs';
+COMMENT ON COLUMN road_edges.manual_flood_depth_cm IS 'Cho phép ghi đè độ sâu ngập thủ công (cm) khi test';
+
+CREATE INDEX idx_road_nodes_location ON road_nodes USING GIST(location);
+CREATE INDEX idx_road_edges_geom ON road_edges USING GIST(geom);
+CREATE INDEX idx_road_edges_from_to ON road_edges(from_node_id, to_node_id);
+CREATE INDEX idx_road_edges_active ON road_edges(is_active);
 
 -- -----------------------------------------------------------------------------
 -- PHẦN 5: BẢNG SENSOR_THRESHOLDS (NGƯỠNG BÁO ĐỘNG)

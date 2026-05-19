@@ -343,6 +343,8 @@ class FloodRepository extends BaseRepository {
                 SELECT
                     date_trunc('hour', fl.created_at) AS bucket,
                     AVG(fl.water_level) AS sensor_avg_water_level,
+                    AVG(fl.temperature) FILTER (WHERE fl.temperature IS NOT NULL) AS sensor_avg_temperature,
+                    AVG(fl.humidity) FILTER (WHERE fl.humidity IS NOT NULL) AS sensor_avg_humidity,
                     COUNT(*)::int AS sensor_points
                 FROM flood_logs fl
                 INNER JOIN sensors s ON s.sensor_id = fl.sensor_id
@@ -394,6 +396,8 @@ class FloodRepository extends BaseRepository {
             SELECT
                 h.bucket AS bucket_time,
                 sa.sensor_avg_water_level,
+                sa.sensor_avg_temperature,
+                sa.sensor_avg_humidity,
                 sa.sensor_points,
                 ca.crowd_avg_water_level,
                 ca.crowd_points,

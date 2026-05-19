@@ -35,3 +35,11 @@ venv/
 python_routing/ml/models/*.joblib
 python_routing/ml/models/*.onnx
 python_routing/ml/models/*.pkl
+
+# Road graph source (OSM full extract; >100MB — generate filtered sets via scripts/filterRoadsGeojson.js)
+data/roads.geojson
+
+# Local DB dumps (use Neon/scripts instead of committing)
+database/full_backup.sql
+database/hcm_flood.sql
+database/hcm_flood_neon.sql
