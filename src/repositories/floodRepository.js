@@ -207,32 +207,30 @@ class FloodRepository extends BaseRepository {
      * @param {number} gridSize - Kích thước lưới (mét)
      */
     async getHeatmapData(bounds = null, gridSize = 500) {
+        const gridM = Math.min(5000, Math.max(50, Number(gridSize) || 500));
         let query = `
             WITH grid AS (
-                SELECT 
+                SELECT
                     ST_SnapToGrid(
-                        ST_SetSRID(ST_MakePoint(
-                            FLOOR(ST_X(s.coords::geometry) * 1000) / 1000.0,
-                            FLOOR(ST_Y(s.coords::geometry) * 1000) / 1000.0
-                        ), 4326)::geography,
-                        $1
-                    ) as grid_point,
-                    AVG(l.water_level) as avg_water_level,
-                    MAX(l.water_level) as max_water_level,
-                    COUNT(*) as data_count,
-                    MAX(l.status) as max_status
+                        ST_Transform(s.coords::geometry, 3857),
+                        $1::double precision
+                    ) AS grid_geom_3857,
+                    AVG(l.water_level) AS avg_water_level,
+                    MAX(l.water_level) AS max_water_level,
+                    COUNT(*)::int AS data_count,
+                    MAX(l.status) AS max_status
                 FROM sensors s
                 LEFT JOIN LATERAL (
                     SELECT water_level, status
                     FROM flood_logs
                     WHERE sensor_id = s.sensor_id
-                    AND created_at >= NOW() - INTERVAL '1 hour'
+                      AND created_at >= NOW() - INTERVAL '1 hour'
                     ORDER BY created_at DESC
                     LIMIT 1
                 ) l ON true
                 WHERE s.is_active = TRUE
         `;
-        const params = [gridSize];
+        const params = [gridM];
         let paramIndex = 2;
 
         if (bounds) {
@@ -242,13 +240,13 @@ class FloodRepository extends BaseRepository {
         }
 
         query += `
-                GROUP BY grid_point
+                GROUP BY grid_geom_3857
             )
-            SELECT 
-                ST_X(grid_point::geometry) as lng,
-                ST_Y(grid_point::geometry) as lat,
-                COALESCE(avg_water_level, 0) as intensity,
-                COALESCE(max_water_level, 0) as max_intensity,
+            SELECT
+                ST_X(ST_Transform(grid_geom_3857, 4326)) AS lng,
+                ST_Y(ST_Transform(grid_geom_3857, 4326)) AS lat,
+                COALESCE(avg_water_level, 0) AS intensity,
+                COALESCE(max_water_level, 0) AS max_intensity,
                 data_count,
                 max_status
             FROM grid
