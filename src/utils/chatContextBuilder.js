@@ -52,7 +52,8 @@ function buildChatContext(sensorList) {
     return {
         he_thong: {
             ten: 'FloodSight',
-            mo_ta: 'Giám sát ngập lụt TP.HCM — cảm biến IoT, bản đồ, cảnh báo, lộ trình an toàn.'
+            mo_ta: 'Giám sát ngập lụt TP.HCM — cảm biến IoT, bản đồ, cảnh báo, lộ trình an toàn.',
+            luu_y: 'Số liệu cm/mức độ chỉ lấy từ tram_co_du_lieu; có thể kết hợp tư vấn kênh chính thống TP.HCM (xem system prompt).'
         },
         cap_nhat_luc: now,
         tong_quan: {
