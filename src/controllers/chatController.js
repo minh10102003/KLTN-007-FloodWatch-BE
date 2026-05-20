@@ -61,7 +61,8 @@ const chatController = {
             }
 
             console.error('[chat] Gemini error:', err.message);
-            const status = err.status === 429 || /quota|rate/i.test(err.message) ? 429 : 502;
+            const status =
+                err.status === 429 || /quota|rate/i.test(String(err.message)) ? 429 : 502;
             res.status(status).json({
                 success: false,
                 error:

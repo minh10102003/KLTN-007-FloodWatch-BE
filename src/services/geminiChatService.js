@@ -1,7 +1,8 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { buildSystemPrompt } = require('../config/geminiChatPrompt');
+const { buildChatContext } = require('../utils/chatContextBuilder');
 
-const DEFAULT_MODEL = 'gemini-2.0-flash';
+const DEFAULT_MODEL = 'gemini-2.5-flash';
 const MAX_MESSAGE_CHARS = 2000;
 const MAX_HISTORY_TURNS = 20;
 
@@ -29,11 +30,9 @@ function normalizeHistory(history) {
         out.push({ role, parts: [{ text: text.slice(0, MAX_MESSAGE_CHARS) }] });
     }
 
-    // Gemini yêu cầu bắt đầu bằng user
     while (out.length && out[0].role !== 'user') {
         out.shift();
     }
-    // Hai turn liên tiếp cùng role → gộp bỏ trùng
     const merged = [];
     for (const turn of out) {
         const last = merged[merged.length - 1];
@@ -47,9 +46,6 @@ function normalizeHistory(history) {
     return merged.slice(-MAX_HISTORY_TURNS * 2);
 }
 
-/**
- * FE gửi history đã gồm tin user hiện tại — tách ra trước khi startChat + sendMessage.
- */
 function splitCurrentUserMessage(history, message) {
     const normalized = normalizeHistory(history);
     const msg = String(message || '').trim();
@@ -88,12 +84,13 @@ async function sendChatMessage(message, history, sensorSnapshot) {
         throw err;
     }
 
-    const sensorJSON = JSON.stringify(sensorSnapshot, null, 2);
-    const systemInstruction = buildSystemPrompt(sensorJSON);
+    const chatContext = buildChatContext(sensorSnapshot);
+    const systemInstruction = buildSystemPrompt(JSON.stringify(chatContext, null, 2));
+    const modelName = getModelName();
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
-        model: getModelName(),
+        model: modelName,
         systemInstruction
     });
 
@@ -103,7 +100,7 @@ async function sendChatMessage(message, history, sensorSnapshot) {
 
     return {
         reply: reply || '',
-        model: getModelName(),
+        model: modelName,
         sensor_count: sensorSnapshot.length
     };
 }
@@ -114,5 +111,6 @@ module.exports = {
     splitCurrentUserMessage,
     getApiKey,
     getModelName,
-    MAX_MESSAGE_CHARS
+    MAX_MESSAGE_CHARS,
+    DEFAULT_MODEL
 };

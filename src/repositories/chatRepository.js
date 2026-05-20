@@ -6,20 +6,36 @@ const { mucDoNguyHiemFromCm } = require('../utils/floodDangerLevel');
  */
 function mapRowToChatSensor(row) {
     const isOffline = row.sensor_status === 'offline';
-    const mucNuoc = isOffline ? 0 : Number(row.water_level) || 0;
-    const trangThai = isOffline ? 'offline' : row.log_status || row.sensor_status || 'normal';
 
+    if (isOffline) {
+        return {
+            sensor_id: row.sensor_id,
+            khu_vuc: row.location_name,
+            trang_thai: 'offline',
+            du_lieu_kha_dung: false,
+            muc_nuoc_cm: null,
+            muc_do_nguy_hiem: null,
+            lan_cap_nhat_cuoi: row.last_data_time || row.created_at || null,
+            toa_do: {
+                lat: row.lat != null ? parseFloat(row.lat) : null,
+                lng: row.lng != null ? parseFloat(row.lng) : null
+            }
+        };
+    }
+
+    const mucNuoc = Number(row.water_level) || 0;
     return {
         sensor_id: row.sensor_id,
         khu_vuc: row.location_name,
+        trang_thai: row.log_status || row.sensor_status || 'normal',
+        du_lieu_kha_dung: true,
         muc_nuoc_cm: mucNuoc,
+        muc_do_nguy_hiem: mucDoNguyHiemFromCm(mucNuoc),
         thoi_gian: row.created_at || row.last_data_time || null,
         toa_do: {
             lat: row.lat != null ? parseFloat(row.lat) : null,
             lng: row.lng != null ? parseFloat(row.lng) : null
         },
-        trang_thai: trangThai,
-        muc_do_nguy_hiem: mucDoNguyHiemFromCm(mucNuoc),
         nhiet_do: row.temperature != null ? parseFloat(row.temperature) : null,
         do_am: row.humidity != null ? parseFloat(row.humidity) : null
     };
@@ -40,7 +56,12 @@ async function getChatSensorSnapshot(area = null, limit = 50) {
         mapped = mapped.filter((r) => String(r.khu_vuc || '').toLowerCase().includes(needle));
     }
 
-    mapped.sort((a, b) => (b.muc_nuoc_cm || 0) - (a.muc_nuoc_cm || 0));
+    mapped.sort((a, b) => {
+        if (a.du_lieu_kha_dung !== b.du_lieu_kha_dung) {
+            return a.du_lieu_kha_dung ? -1 : 1;
+        }
+        return (b.muc_nuoc_cm || 0) - (a.muc_nuoc_cm || 0);
+    });
 
     const max = Math.min(100, Math.max(1, parseInt(limit, 10) || 50));
     return mapped.slice(0, max);
