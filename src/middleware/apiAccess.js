@@ -30,6 +30,7 @@ function isGuestReadableGet(path) {
 
     if (path === '/api/news' || path.startsWith('/api/news/')) return true;
     if (path === '/api/v1/news' || path.startsWith('/api/v1/news/')) return true;
+    if (path === '/api/flood-status') return true;
 
     const prefixes = [
         '/api/v1/flood-data',
@@ -60,6 +61,7 @@ function isOptionalAuthWrite(method, path) {
         if (path === '/api/report-flood') return true;
         if (path === '/api/upload/report-image') return true;
         if (path === '/api/energy' || path === '/api/energy/') return true;
+        if (path === '/api/chat') return true;
     }
     if (method === 'PUT' && /^\/api\/ota\/[^/]+\/status$/.test(path)) return true;
     return false;

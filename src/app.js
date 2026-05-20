@@ -27,6 +27,7 @@ const accessLogMiddleware = require('./middleware/accessLogMiddleware');
 const googleAuthRoutes = require('./routes/googleAuthRoutes');
 const geocodeRoutes = require('./routes/geocodeRoutes');
 const newsRoutes = require('./routes/newsRoutes');
+const chatRoutes = require('./routes/chatRoutes');
 const path = require('path');
 const { createCorsOriginCallback } = require('./config/corsAllowedOrigins');
 const { emitAdminNotification } = require('./socket/adminSocket');
@@ -71,6 +72,7 @@ app.use('/api/v1/geocode', geocodeRoutes);
 app.use('/api/news', newsRoutes);
 app.use('/api/v1/news', newsRoutes);
 app.use('/api', weatherRoutes);
+app.use('/api', chatRoutes);
 
 // ==========================================
 // 2. GLOBAL API ACCESS (đọc công khai / optional Bearer → apiAccess)
