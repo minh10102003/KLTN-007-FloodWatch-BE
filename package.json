@@ -22,6 +22,7 @@
     "migrate:email-verified-at": "node scripts/runMigrationEmailVerifiedAt.js",
     "migrate:s01-real": "node scripts/runMigrationS01RealHardware.js",
     "migrate:s02-node-007": "node scripts/runMigrationS02Node007.js",
+    "migrate:node-007-height-75": "node scripts/runMigrationNode007Height75.js",
     "migrate:s01-height-100": "node scripts/runMigrationS01Height100.js",
     "migrate:user-last-location": "node scripts/runMigrationUserLastLocation.js",
     "migrate:flood-ingest-key": "node scripts/runMigrationFloodLogsIngestKey.js",

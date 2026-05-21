@@ -32,7 +32,7 @@ SELECT
     'Real_LoRa_Node',
     model,
     installation_date,
-    COALESCE(NULLIF(installation_height, 0), 150.0),
+    COALESCE(NULLIF(installation_height, 0), 75.0),
     TRUE,
     status,
     firmware_version,
@@ -51,7 +51,7 @@ UPDATE sensors SET
     location_name = 'Bình Quới (P.28) - NODE_007 (LoRa/MQTT)',
     hardware_type = 'Real_LoRa_Node',
     is_active = TRUE,
-    installation_height = COALESCE(NULLIF(installation_height, 0), 150.0)
+    installation_height = COALESCE(NULLIF(installation_height, 0), 75.0)
 WHERE sensor_id = 'NODE_007';
 
 -- 3) Ngưỡng cảnh báo

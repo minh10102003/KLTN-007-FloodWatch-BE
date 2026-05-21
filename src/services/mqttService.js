@@ -8,6 +8,7 @@ const emergencyAlertSendLogRepository = require('../repositories/emergencyAlertS
 const emergencyNotificationService = require('./emergencyNotificationService');
 const { KalmanFilter } = require('./kalmanFilterService');
 const { determineStatusFromLevel } = require('./floodStatusService');
+const { computeWaterLevelFromDistance } = require('../utils/ultrasonicWaterLevel');
 const { emitAdminNotification } = require('../socket/adminSocket');
 
 // Lưu trữ Kalman filter cho mỗi sensor
@@ -193,8 +194,17 @@ const init = () => {
                 return;
             }
             
-            // 5. Tính mực nước: Mực nước = Độ cao lắp đặt - Khoảng cách đo được
-            const waterLevel = Math.max(0, installationHeight - filteredDistance);
+            // 5. Tính mực nước (cm) theo sơ đồ ống: H_sensor − distance, vùng mù & khô
+            const levelResult = computeWaterLevelFromDistance(filteredDistance, {
+                installationHeightCm: installationHeight
+            });
+            const waterLevel = levelResult.water_level_cm;
+            if (levelResult.zone === 'invalid') {
+                console.log(
+                    `⚠️ [WaterLevel] Invalid distance from ${sensor_id}: ${filteredDistance}cm`
+                );
+                return;
+            }
             
             // 6. Tính vận tốc nước dâng
             const velocity = await calculateVelocity(sensor_id, waterLevel);

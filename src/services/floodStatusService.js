@@ -11,6 +11,8 @@
  * `mqttService.determineStatus`.
  */
 
+const { computeWaterLevelFromDistance } = require('../utils/ultrasonicWaterLevel');
+
 const DEFAULT_THRESHOLDS = Object.freeze({
     warning_threshold: 10,
     danger_threshold: 30,
@@ -38,22 +40,29 @@ function colorForStatus(status) {
 }
 
 /**
- * Mô phỏng bước cuối của pipeline MQTT (sau Kalman + dist→water_level):
- *
- *     waterLevel = max(0, installationHeight - rawDistance)
- *     status     = determineStatusFromLevel(waterLevel, thresholds)
- *     color      = colorForStatus(status)
- *
+ * Mô phỏng bước cuối của pipeline MQTT (sau Kalman + dist→water_level).
  * Trả về object gọn để FE map dot/marker đổi màu.
  */
-function computeMapPointFromRaw({ sensorId, rawDistance, installationHeight, thresholds }) {
-    const wl = Math.max(0, Number(installationHeight) - Number(rawDistance));
+function computeMapPointFromRaw({
+    sensorId,
+    rawDistance,
+    installationHeight,
+    thresholds,
+    minBlindDistanceCm
+}) {
+    const level = computeWaterLevelFromDistance(rawDistance, {
+        installationHeightCm: installationHeight,
+        minBlindDistanceCm
+    });
+    const wl = level.water_level_cm;
     const status = determineStatusFromLevel(wl, thresholds);
     return {
         sensor_id: sensorId,
         water_level: wl,
+        water_level_percent: level.water_level_percent,
+        zone: level.zone,
         status,
-        color: colorForStatus(status),
+        color: colorForStatus(status)
     };
 }
 
