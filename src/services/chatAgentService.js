@@ -104,64 +104,10 @@ async function analyzeReportIntent(userMessage) {
 }
 
 /**
- * Geocode địa chỉ → lat/lng (Google).
+ * Geocode địa chỉ → lat/lng (Geocoding + Places fallback).
  */
 async function resolveLocation(locationText) {
-    const address = String(locationText || '').trim();
-    if (address.length < 3) {
-        return { ok: false, error: 'Địa chỉ quá ngắn', lat: null, lng: null, formatted_address: null };
-    }
-
-    try {
-        if (!googlePlacesGeocodeService.getApiKey()) {
-            return {
-                ok: false,
-                error: 'Server chưa cấu hình geocode (GOOGLE_PLACES_API_KEY)',
-                lat: null,
-                lng: null,
-                formatted_address: null
-            };
-        }
-
-        const data = await googlePlacesGeocodeService.geocodeForward(
-            address.includes('TP.HCM') || address.includes('Hồ Chí Minh')
-                ? address
-                : `${address}, TP. Hồ Chí Minh, Vietnam`
-        );
-
-        if (data.status !== 'OK' || !data.results?.length) {
-            return {
-                ok: false,
-                error: 'Không tìm thấy tọa độ cho địa chỉ này',
-                lat: null,
-                lng: null,
-                formatted_address: null
-            };
-        }
-
-        const best = data.results[0];
-        const loc = best.geometry?.location;
-        if (loc?.lat == null || loc?.lng == null) {
-            return { ok: false, error: 'Google không trả tọa độ', lat: null, lng: null, formatted_address: null };
-        }
-
-        return {
-            ok: true,
-            error: null,
-            lat: Number(loc.lat),
-            lng: Number(loc.lng),
-            formatted_address: best.formatted_address || address,
-            place_id: best.place_id || null
-        };
-    } catch (err) {
-        return {
-            ok: false,
-            error: err.message || 'Lỗi geocode',
-            lat: null,
-            lng: null,
-            formatted_address: null
-        };
-    }
+    return googlePlacesGeocodeService.resolveAddressToCoords(locationText);
 }
 
 /**
@@ -205,6 +151,7 @@ async function buildReportDraft(intentAnalysis) {
     const geo = await resolveLocation(draft.location_description);
     if (!geo.ok) {
         draft.geocode_error = geo.error;
+        draft.geocode_code = geo.code || null;
         draft.missing_fields = [...new Set([...draft.missing_fields, 'geocode'])];
         return draft;
     }
@@ -237,12 +184,18 @@ Trong câu trả lời: tóm tắt nháp, nhắc bấm **Xác nhận gửi báo 
     }
 
     const missing = (reportDraft.missing_fields || []).join(', ');
+    const geoHint =
+        reportDraft.geocode_code === 'NO_GEOCODE_KEY'
+            ? 'Hệ thống chưa bật Google Maps API trên server — nhắn admin cấu hình GOOGLE_PLACES_API_KEY.'
+            : reportDraft.geocode_error
+              ? `Lỗi địa chỉ: ${reportDraft.geocode_error}. Gợi ý: nêu tên đường + quận, hoặc dùng nút Xác nhận sau khi chọn vị trí trên bản đồ.`
+              : '';
     return `
 
 ## Yêu cầu tạo báo cáo (chưa đủ dữ liệu)
 Thiếu: ${missing || 'thông tin'}.
-${reportDraft.geocode_error ? `Lỗi địa chỉ: ${reportDraft.geocode_error}.` : ''}
-Hỏi user bổ sung (địa chỉ cụ thể TP.HCM, mức: Nhẹ / Trung bình / Nặng). Không bịa tọa độ.`;
+${geoHint}
+Hỏi user bổ sung (địa chỉ cụ thể TP.HCM, mức: Nhẹ / Trung bình / Nặng). Không bịa tọa độ. Không khuyên chuyển sang form khác nếu chỉ thiếu tọa độ — hướng user mô tả lại đường/quận rõ hơn.`;
 }
 
 module.exports = {
