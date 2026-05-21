@@ -1,5 +1,5 @@
-# Monolith: Node.js API + Python FastAPI routing trong một container (một Railway service).
-# Railway: Build → Dockerfile path = Dockerfile (root), hoặc set Builder = Dockerfile.
+# Monolith (tuỳ chọn): Node.js API + Python FastAPI routing — deploy Docker trên Render.
+# Render Web Service mặc định: Native Node, Start Command = npm start (không cần file này).
 
 FROM node:22-bookworm-slim
 
@@ -25,12 +25,11 @@ RUN python3 -m venv /opt/venv \
 
 ENV PATH="/opt/venv/bin:${PATH}"
 ENV PYTHONUNBUFFERED=1
-# Python routing nghe cổng này; Node dùng PORT của Railway.
+# Python routing; Node dùng PORT do Render inject.
 ENV PYTHON_ROUTING_PORT=8001
 
 COPY . .
 
 EXPOSE 3000
 
-# Dùng Node launcher để luôn resolve đúng path (Railway Start Command đôi khi cwd ≠ /app).
-CMD ["node", "scripts/railway-start.js"]
+CMD ["node", "scripts/render-start.js"]

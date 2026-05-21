@@ -1,7 +1,7 @@
 /**
  * Cột telegram + bảng telegram_link_tokens.
  * Chạy: npm run migrate:telegram-per-user
- * Railway: railway ssh "npm run migrate:telegram-per-user"
+ * Production: máy local + DATABASE_URL Neon, hoặc Render Shell
  */
 const fs = require('fs');
 const path = require('path');

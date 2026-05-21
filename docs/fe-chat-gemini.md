@@ -35,12 +35,55 @@ Content-Type: application/json
   "reply": "…",
   "timestamp": "2026-05-20T10:00:00.000Z",
   "meta": {
-    "model": "gemini-2.0-flash",
+    "model": "gemini-2.5-flash",
     "sensor_count": 3,
-    "account_id": "user_1716…"
+    "intent": "general",
+    "account_id": "user_1716…",
+    "report_draft": null
   }
 }
 ```
+
+Khi user yêu cầu **tạo báo cáo ngập** (Hướng B), `meta.intent` = `"create_report"` và có thể có `report_draft`:
+
+```json
+"report_draft": {
+  "ready": true,
+  "intent": "create_report",
+  "level": "Nặng",
+  "lat": 10.798,
+  "lng": 106.721,
+  "location_description": "Quận 7, Nguyễn Hữu Thọ",
+  "formatted_address": "Nguyễn Hữu Thọ, Quận 7, TP.HCM",
+  "content": "Ngập sâu, xe không qua được",
+  "missing_fields": [],
+  "geocode_ok": true,
+  "confirm_action": "POST /api/chat/confirm-report"
+}
+```
+
+- `ready: false` + `missing_fields`: AI hỏi thêm (thiếu địa chỉ / mức ngập / geocode lỗi).
+- **Chưa ghi DB** cho đến khi FE gọi confirm.
+
+### `POST /api/chat/confirm-report` (Hướng B — sau khi user bấm Xác nhận)
+
+**Body** (lấy từ `meta.report_draft` khi `ready: true`):
+
+```json
+{
+  "level": "Nặng",
+  "lat": 10.798,
+  "lng": 106.721,
+  "location_description": "Nguyễn Hữu Thọ, Quận 7, TP.HCM",
+  "content": "Ngập sâu, xe không qua được"
+}
+```
+
+- Có JWT: không cần `name`.
+- Khách: thêm `name` (giống `POST /api/report-flood`).
+- Dùng chung rate limit báo cáo.
+
+**Response 200:** `success`, `message`, `data.id`, `reply` (tin bot sau khi gửi thành công).
 
 **Lỗi thường gặp**
 
@@ -102,7 +145,41 @@ Lấy snapshot cùng định dạng đưa vào AI (widget, bảng tóm tắt, kh
 
 ---
 
-## 3. Lịch sử chat (localStorage)
+## 3. UI gợi ý — card nháp báo cáo (Hướng B)
+
+Khi `meta.report_draft?.ready === true`:
+
+1. Hiển thị card: địa chỉ, mức ngập, mô tả, tọa độ.
+2. Nút **Xác nhận gửi báo cáo** → `POST /api/chat/confirm-report` với body trên + `Authorization` nếu đăng nhập.
+3. Nút **Sửa / Hủy** → user chat lại hoặc đóng card.
+4. Sau success: hiện `#${data.id}`, trạng thái `pending`.
+
+```javascript
+async function confirmReportDraft(draft) {
+  const headers = { 'Content-Type': 'application/json' };
+  const token = localStorage.getItem('access_token');
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(`${API_BASE}/api/chat/confirm-report`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      level: draft.level,
+      lat: draft.lat,
+      lng: draft.lng,
+      location_description: draft.formatted_address || draft.location_description,
+      content: draft.content || undefined
+    })
+  });
+  return res.json();
+}
+```
+
+Ví dụ câu chat: *"Hãy tạo báo cáo ở Quận 7 đường Nguyễn Hữu Thọ, ngập nặng"*.
+
+---
+
+## 4. Lịch sử chat (localStorage)
 
 Giữ logic mẫu của bạn; chỉnh **URL và xử lý response**:
 
@@ -152,7 +229,7 @@ async function sendMessage() {
 
 ---
 
-## 4. Gợi ý UI
+## 5. Gợi ý UI
 
 - Chip câu hỏi nhanh: giữ nguyên, gọi cùng `sendMessage()`.
 - Trước khi mở chat: có thể `GET /api/flood-status` để hiển thị 3 trạm ngập nhất.
@@ -161,7 +238,7 @@ async function sendMessage() {
 
 ---
 
-## 5. Env FE (Vite)
+## 6. Env FE (Vite)
 
 ```env
 VITE_API_URL=https://api.floodsight.id.vn
@@ -179,21 +256,22 @@ Khi dùng proxy, `API_BASE = ''` (relative).
 
 ---
 
-## 6. Ops (Render / Railway)
+## 7. Ops (Render + Neon)
 
 Backend cần:
 
 ```env
-GEMINI_API_KEY=…          # Google AI Studio
-GEMINI_MODEL=gemini-2.0-flash   # tuỳ chọn; có thể gemini-1.5-flash
+GEMINI_API_KEY=…
+GEMINI_MODEL=gemini-2.5-flash
 CHAT_API_MAX_PER_MINUTE=12
+GOOGLE_PLACES_API_KEY=…   # hoặc GOOGLE_GEOCODING_API_KEY — bắt buộc cho geocode nháp báo cáo
 ```
 
 Lấy key: [Google AI Studio](https://aistudio.google.com) → Get API key.
 
 ---
 
-## 7. So với mock HTML gốc
+## 8. So với mock HTML gốc
 
 | Mock | Thực tế |
 |------|---------|

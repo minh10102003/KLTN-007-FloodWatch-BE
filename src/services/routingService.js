@@ -13,14 +13,14 @@ function readPositiveIntEnv(name, fallback) {
 
 /** Gọi Python /safe-path: graph lớn + A* có thể >10s; quá ngắn sẽ abort rồi fallback Node (rất chậm) → client hay bị 15s timeout. */
 const PYTHON_ROUTING_FETCH_TIMEOUT_MS = readPositiveIntEnv('PYTHON_ROUTING_FETCH_TIMEOUT_MS', 120_000);
-/** Health: Railway cold start / graph load có thể >5s; legacy path dùng health để fail nhanh. */
+/** Health: cold start / graph load có thể >5s; legacy path dùng health để fail nhanh. */
 const PYTHON_ROUTING_HEALTH_TIMEOUT_MS = readPositiveIntEnv('PYTHON_ROUTING_HEALTH_TIMEOUT_MS', 15_000);
 /** Tắt hoàn toàn Python routing để chạy Node legacy như trước (single service). */
 const PYTHON_ROUTING_ENABLED = String(process.env.PYTHON_ROUTING_ENABLED || 'true').toLowerCase() !== 'false';
 /** Cầu chì cho single-service mode: tắt legacy A* nặng để tránh OOM toàn backend. */
 const ROUTING_LEGACY_ENABLED = String(process.env.ROUTING_LEGACY_ENABLED || 'true').toLowerCase() !== 'false';
 
-/** Trên production đồ thị lớn (~M edges), fallback A* legacy trong Node dễ OOM / treo > proxy Railway → 502. Đặt false để chỉ dùng Python và trả 503 rõ ràng khi Python lỗi. */
+/** Trên production đồ thị lớn (~M edges), fallback A* legacy trong Node dễ OOM / treo → 502. Đặt false để chỉ dùng Python và trả 503 rõ ràng khi Python lỗi. */
 const ROUTING_LEGACY_FALLBACK = String(process.env.ROUTING_LEGACY_FALLBACK || 'true').toLowerCase() !== 'false';
 
 // ── Legacy A* (fallback) ─────────────────────────────────────────────────────
@@ -424,7 +424,7 @@ const routingService = {
             return findSafePathLegacy(params);
         }
         // Chỉ dùng health khi còn fallback legacy: fail nhanh, tránh chờ timeout safe-path 120s.
-        // ROUTING_LEGACY_FALLBACK=false: KHÔNG gọi health — health hay false-negative (cold start Railway,
+        // ROUTING_LEGACY_FALLBACK=false: KHÔNG gọi health — health hay false-negative (cold start,
         // Python bận) dù GET /safe-path vẫn chạy được → trước đây trả 503 sai.
         if (ROUTING_LEGACY_FALLBACK) {
             const pythonUp = await isPythonServiceAvailable();

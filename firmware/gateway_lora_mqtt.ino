@@ -1,305 +1,309 @@
 /**
- * Gateway: LoRa RX -> HiveMQ MQTTS -> topic hcm/flood/data
- *
- * Phần cứng (sơ đồ Gateway): NSS5 RST26 DIO0 4 | SCK18 MISO19 MOSI23
- * OLED I2C: SDA21 SCL22 (0x3C)
- *
- * Thư viện Arduino: LoRa (Sandeep Mistry), PubSubClient,
- *                   Adafruit SSD1306, Adafruit GFX
- *
- * Cấu hình WiFi/MQTT: sửa trong khối bên dưới (không commit mật khẩu lên git).
+ * ESP32 SINGLE CHANNEL GATEWAY (433.175 MHz)
+ * Dành cho mạch: ESP32 + Ra-02 (SX1278)
+ * Đã cập nhật cho màn hình OLED 0.96 inch (I2C: SDA=21, SCL=22)
+ * Cập nhật: Forward gói JSON tuỳ chỉnh sang MQTT (HiveMQ Cloud - TLS 8883)
  */
 
 #include <WiFi.h>
-#include <WiFiClientSecure.h>
-#include <PubSubClient.h>
 #include <SPI.h>
-#include <LoRa.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#include <WiFiClientSecure.h>
+#include <PubSubClient.h>
 
-// ================== CHÂN ==================
-#define LORA_NSS   5
-#define LORA_RST   26
-#define LORA_DIO0  4
-#define LORA_SCK   18
-#define LORA_MISO  19
-#define LORA_MOSI  23
+// =========================================================================
+// CẤU HÌNH MÀN HÌNH OLED 0.96 INCH
+// =========================================================================
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define OLED_RESET    -1
+#define SCREEN_ADDRESS 0x3C
 
-#define OLED_SDA   21
-#define OLED_SCL   22
-#define OLED_ADDR  0x3C
-#define SCREEN_W   128
-#define SCREEN_H   64
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
-#define REG_VERSION       0x42
-#define RUN_LORA_SELF_TEST  true
-#define HALT_IF_LORA_FAIL   true
+// =========================================================================
+// 1. CẤU HÌNH WIFI & MQTT HIVEMQ CLOUD
+// =========================================================================
+const char* ssid          = "Cafe Me Khuc";     
+const char* pass          = "888888888";        
 
-// ================== WIFI / MQTT ==================
-const char* WIFI_SSID     = "QON CaPhe";
-const char* WIFI_PASSWORD = "xincamon";
+const char* mqtt_server   = "1af3004441454f2aabda930c941a552d.s1.eu.hivemq.cloud";
+const int   mqtt_port     = 8883; // Bắt buộc dùng 8883 cho HiveMQ Cloud
+const char* mqtt_user     = "tram_cam_bien_1";
+const char* mqtt_password = "Minh@2003";
+const char* mqtt_topic    = "hcm/flood/data"; // Đã cập nhật topic theo yêu cầu
 
-const char* MQTT_HOST     = "1af3004441454f2aabda930c941a552d.s1.eu.hivemq.cloud";
-const uint16_t MQTT_PORT  = 8883;
-const char* MQTT_USER     = "tram_cam_bien_1";
-const char* MQTT_PASSWORD = "Minh@2003";
+WiFiClientSecure espClient;
+PubSubClient mqtt_client(espClient);
 
-const char* MQTT_TOPIC    = "hcm/flood/data";
+// =========================================================================
+// 3. CẤU HÌNH PHẦN CỨNG LORA
+// =========================================================================
+#define SCK_PIN  18
+#define MISO_PIN 19
+#define MOSI_PIN 23
+#define SS_PIN   5    
+#define RST_PIN  26   
+#define DIO0_PIN 4    
 
-const long LORA_FREQ      = 433E6;
-const int   LORA_SF       = 7;
-const long  LORA_BW       = 125E3;
-const int   LORA_CR       = 5;
-const int   LORA_SYNC     = 0x12;
-const int   LORA_TX_DBM   = 17;
+#define I2C_SDA_PIN 21
+#define I2C_SCL_PIN 22
 
-static const SPISettings LORA_SPI_SETTINGS(1000000, MSBFIRST, SPI_MODE0);
+#define FREQUENCY  433175000  
+#define SPREADING  7          
+#define BANDWIDTH  125E3      
 
-// ================== GLOBAL ==================
-WiFiClientSecure secureClient;
-PubSubClient mqtt(secureClient);
-Adafruit_SSD1306 display(SCREEN_W, SCREEN_H, &Wire, -1);
+// =========================================================================
+// THANH GHI SX1278 (GIỮ NGUYÊN)
+// =========================================================================
+#define REG_FIFO                    0x00
+#define REG_OP_MODE                 0x01
+#define REG_FRF_MSB                 0x06
+#define REG_FRF_MID                 0x07
+#define REG_FRF_LSB                 0x08
+#define REG_PA_CONFIG               0x09
+#define REG_FIFO_ADDR_PTR           0x0D
+#define REG_FIFO_TX_BASE_ADDR       0x0E
+#define REG_FIFO_RX_BASE_ADDR       0x0F
+#define REG_FIFO_RX_CURRENT_ADDR    0x10
+#define REG_IRQ_FLAGS               0x12
+#define REG_RX_NB_BYTES             0x13
+#define REG_MODEM_STAT              0x18
+#define REG_MODEM_CONFIG_1          0x1D
+#define REG_MODEM_CONFIG_2          0x1E
+#define REG_MODEM_CONFIG_3          0x26
+#define REG_SYNC_WORD               0x39
+#define REG_DIO_MAPPING_1           0x40
+#define REG_VERSION                 0x42
 
-bool g_oledOk = false;
-String line1 = "GW";
-String line2 = "";
-String line3 = "";
-unsigned long lastOledMs = 0;
+#define MODE_LONG_RANGE_MODE        0x80
+#define MODE_SLEEP                  0x00
+#define MODE_STDBY                  0x01
+#define MODE_TX                     0x03
+#define MODE_RX_CONTINUOUS          0x05
 
-static void loraAttachSpiBus() {
-  SPI.begin(LORA_SCK, LORA_MISO, LORA_MOSI, LORA_NSS);
-#if defined(ESP32) || defined(ARDUINO_ARCH_ESP32)
-  LoRa.setSPI(SPI);
-#endif
+char packetBuffer[256];
+
+void writeRegister(byte addr, byte data) {
+  digitalWrite(SS_PIN, LOW);
+  SPI.transfer(addr | 0x80);
+  SPI.transfer(data);
+  digitalWrite(SS_PIN, HIGH);
 }
 
-void oledShow() {
-  if (!g_oledOk) return;
+byte readRegister(byte addr) {
+  digitalWrite(SS_PIN, LOW);
+  SPI.transfer(addr & 0x7F);
+  byte val = SPI.transfer(0x00);
+  digitalWrite(SS_PIN, HIGH);
+  return val;
+}
+
+void setupLoRa() {
+  digitalWrite(RST_PIN, LOW); delay(100);
+  digitalWrite(RST_PIN, HIGH); delay(100);
+
+  byte version = readRegister(REG_VERSION);
+  Serial.print("LoRa Chip Version: 0x"); Serial.println(version, HEX);
+  if (version != 0x12) {
+    Serial.println("Error: SX1278 not found!");
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.println("LoRa Error!");
+    display.display();
+    while (1);
+  }
+
+  writeRegister(REG_OP_MODE, MODE_LONG_RANGE_MODE | MODE_SLEEP);
+  writeRegister(REG_OP_MODE, MODE_LONG_RANGE_MODE | MODE_STDBY);
+
+  uint64_t frf = ((uint64_t)FREQUENCY << 19) / 32000000;
+  writeRegister(REG_FRF_MSB, (uint8_t)(frf >> 16));
+  writeRegister(REG_FRF_MID, (uint8_t)(frf >> 8));
+  writeRegister(REG_FRF_LSB, (uint8_t)(frf >> 0));
+
+  writeRegister(REG_SYNC_WORD, 0x34); 
+
+  writeRegister(REG_MODEM_CONFIG_1, 0x72); 
+  writeRegister(REG_MODEM_CONFIG_2, 0x74); 
+  writeRegister(REG_MODEM_CONFIG_3, 0x04); 
+
+  writeRegister(REG_FIFO_TX_BASE_ADDR, 0);
+  writeRegister(REG_FIFO_RX_BASE_ADDR, 0);
+  writeRegister(REG_IRQ_FLAGS, 0xFF);      
+
+  writeRegister(REG_OP_MODE, MODE_LONG_RANGE_MODE | MODE_RX_CONTINUOUS);
+  Serial.println("[+] LoRa init done. Listening on 433.175 MHz");
+  
   display.clearDisplay();
-  display.setTextSize(1);
-  display.setTextColor(SSD1306_WHITE);
   display.setCursor(0, 0);
-  display.println(line1);
-  display.println(line2);
-  display.println(line3);
+  display.println("GW: Ready");
+  display.println("Listening...");
   display.display();
 }
 
-void oledTick() {
-  if (!g_oledOk) return;
-  if (millis() - lastOledMs < 400) return;
-  lastOledMs = millis();
-  oledShow();
-}
+// =========================================================================
+// HÀM KẾT NỐI MQTT
+// =========================================================================
+void reconnectMQTT() {
+  while (!mqtt_client.connected()) {
+    Serial.print("Dang ket noi MQTT...");
+    display.setCursor(0, 48);
+    display.fillRect(0, 48, 128, 16, SSD1306_BLACK);
+    display.print("MQTT Conn...");
+    display.display();
 
-bool setupOled() {
-  Wire.begin(OLED_SDA, OLED_SCL);
-  if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDR)) {
-    Serial.println("OLED: skip");
-    g_oledOk = false;
-    return false;
-  }
-  g_oledOk = true;
-  display.clearDisplay();
-  display.setCursor(0, 0);
-  display.println("Flood GW");
-  display.display();
-  return true;
-}
+    String clientId = "ESP32GW-";
+    clientId += String(random(0xffff), HEX);
 
-// SX127x READ: MSB=1 (đúng datasheet + thư viện LoRa.cpp)
-uint8_t sxReadReg(uint8_t reg) {
-  uint8_t v;
-  digitalWrite(LORA_NSS, LOW);
-  SPI.beginTransaction(LORA_SPI_SETTINGS);
-  SPI.transfer(reg | 0x80);
-  v = SPI.transfer(0x00);
-  SPI.endTransaction();
-  digitalWrite(LORA_NSS, HIGH);
-  return v;
-}
-
-void sxHardwareReset() {
-  pinMode(LORA_RST, OUTPUT);
-  digitalWrite(LORA_RST, LOW);
-  delay(20);
-  digitalWrite(LORA_RST, HIGH);
-  delay(50);
-}
-
-bool loraSelfTestSpi() {
-  Serial.println("=== LORA SELF-TEST ===");
-  pinMode(LORA_NSS, OUTPUT);
-  digitalWrite(LORA_NSS, HIGH);
-  sxHardwareReset();
-  Serial.println("[T1] RST pulse: OK");
-
-  loraAttachSpiBus();
-
-  uint8_t ver = sxReadReg(REG_VERSION);
-  Serial.printf("[T2] VERSION = 0x%02X", ver);
-  if (ver == 0x12) {
-    Serial.println(" OK (SX127x)");
-    line2 = "LoRa SPI OK";
-    line3 = "Ver 0x12";
-    oledShow();
-    return true;
-  }
-  Serial.println(" FAIL");
-  line2 = "LoRa SPI FAIL";
-  line3 = "MISO/NSS/GND?";
-  oledShow();
-  return false;
-}
-
-bool loraSelfTestRadio() {
-  loraAttachSpiBus();
-  LoRa.setPins(LORA_NSS, LORA_RST, LORA_DIO0);
-  LoRa.setSPIFrequency(1000000);
-
-  if (!LoRa.begin(LORA_FREQ)) {
-    Serial.printf("[T3] LoRa.begin FAIL\n");
-    line2 = "begin FAIL";
-    line3 = "Try 868E6";
-    oledShow();
-    return false;
-  }
-  LoRa.setSpreadingFactor(LORA_SF);
-  LoRa.setSignalBandwidth(LORA_BW);
-  LoRa.setCodingRate4(LORA_CR);
-  LoRa.setSyncWord(LORA_SYNC);
-  LoRa.setTxPower(LORA_TX_DBM);
-  LoRa.enableCrc();
-
-  LoRa.beginPacket();
-  LoRa.print("GW_TEST");
-  Serial.printf("[T4] TX test: %s\n", LoRa.endPacket() ? "OK" : "FAIL");
-
-  line2 = "LoRa OK";
-  line3 = "MQTT next";
-  oledShow();
-  Serial.println("=== SELF-TEST PASS ===\n");
-  return true;
-}
-
-void setupWiFi() {
-  line2 = "WiFi...";
-  oledShow();
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(400);
-    Serial.print(".");
-    oledTick();
-  }
-  line1 = "WiFi OK";
-  line2 = WiFi.localIP().toString();
-  line3 = "";
-  oledShow();
-  Serial.printf("\nWiFi OK %s\n", line2.c_str());
-}
-
-void mqttReconnect() {
-  line3 = "MQTT...";
-  oledShow();
-  while (!mqtt.connected()) {
-    String cid = "gw-" + String((uint32_t)ESP.getEfuseMac(), HEX);
-    if (mqtt.connect(cid.c_str(), MQTT_USER, MQTT_PASSWORD)) {
-      line3 = "MQTT OK";
-      oledShow();
+    if (mqtt_client.connect(clientId.c_str(), mqtt_user, mqtt_password)) {
+      Serial.println(" Da ket noi MQTT!");
+      display.fillRect(0, 48, 128, 16, SSD1306_BLACK);
+      display.setCursor(0, 48);
+      display.print("MQTT: OK");
+      display.display();
     } else {
-      Serial.printf("MQTT fail %d\n", mqtt.state());
-      line3 = "MQTT " + String(mqtt.state());
-      oledShow();
-      delay(3000);
+      Serial.print(" Loi rc=");
+      Serial.print(mqtt_client.state());
+      Serial.println(" thu lai sau 5s");
+      delay(5000);
     }
   }
+}
+
+// =========================================================================
+// ĐÓNG GÓI VÀ GỬI LÊN MQTT (ĐÃ CẬP NHẬT)
+// =========================================================================
+void sendMqttPacket(char *data, int len, int rssi, float snr) {
+  // 1. Đọc dữ liệu thô từ Node gửi sang (Dạng CSV: "30,81,OK")
+  String receivedData = "";
+  for(int i=0; i<len; i++) {
+    receivedData += (char)data[i];
+  }
+
+  // 2. Tách biến khoảng cách và mực nước
+  int fake_distance = 0;
+  int water_level = 0;
+  
+  int firstComma = receivedData.indexOf(',');
+  int secondComma = receivedData.indexOf(',', firstComma + 1);
+  
+  if (firstComma != -1 && secondComma != -1) {
+    fake_distance = receivedData.substring(0, firstComma).toInt();
+    water_level = receivedData.substring(firstComma + 1, secondComma).toInt();
+  } else {
+    // Fallback nếu chuỗi không có dấu phẩy
+    fake_distance = receivedData.toInt();
+  }
+
+  // 3. Khai báo ID trạm và tạo chuỗi JSON Payload
+  String sensor_id = "NODE_007"; // Đặt ID tĩnh hoặc lấy từ biến cấu hình
+  String payload = "{\"sensor_id\": \"" + sensor_id + "\", \"value\":" + String(fake_distance) + "}";
+
+  // 4. In log ra Serial chuẩn theo yêu cầu của bạn
+  Serial.print("["); Serial.print(sensor_id); Serial.print("] raw_distance: ");
+  Serial.print(fake_distance); Serial.print("cm, water_level: "); Serial.print(water_level); Serial.println("cm");
+
+  // 5. Gửi lên MQTT Broker
+  if (mqtt_client.connected()) {
+    if(mqtt_client.publish(mqtt_topic, payload.c_str())) {
+      display.fillRect(0, 48, 128, 16, SSD1306_BLACK);
+      display.setCursor(0, 48);
+      display.print("MQTT Pub: OK");
+    } else {
+      display.fillRect(0, 48, 128, 16, SSD1306_BLACK);
+      display.setCursor(0, 48);
+      display.print("MQTT Pub: FAIL");
+    }
+  } else {
+    Serial.println("[-] Mat ket noi MQTT, drop packet");
+  }
+  display.display();
 }
 
 void setup() {
   Serial.begin(115200);
-  delay(1200);
+  delay(100);
 
-  setupOled();
-  line1 = "Flood Gateway";
-  line2 = "Boot";
-  oledShow();
-
-  if (RUN_LORA_SELF_TEST) {
-    if (!loraSelfTestSpi()) {
-      Serial.println("SPI fail: check MISO->GPIO19, MOSI->23, SCK->18, NSS->5, RST->26, GND, 3V3");
-      if (HALT_IF_LORA_FAIL) {
-        line1 = "STOP";
-        line2 = "LoRa SPI";
-        line3 = "FAIL";
-        oledShow();
-        while (true) delay(1000);
-      }
-    } else if (!loraSelfTestRadio()) {
-      if (HALT_IF_LORA_FAIL) {
-        line1 = "STOP";
-        line2 = "LoRa RF";
-        line3 = "FAIL";
-        oledShow();
-        while (true) delay(1000);
-      }
-    }
-  } else {
-    loraAttachSpiBus();
-    LoRa.setPins(LORA_NSS, LORA_RST, LORA_DIO0);
-    LoRa.setSPIFrequency(1000000);
-    if (!LoRa.begin(LORA_FREQ)) {
-      while (true) delay(1000);
-    }
-    LoRa.setSpreadingFactor(LORA_SF);
-    LoRa.setSignalBandwidth(LORA_BW);
-    LoRa.setCodingRate4(LORA_CR);
-    LoRa.setSyncWord(LORA_SYNC);
-    LoRa.setTxPower(LORA_TX_DBM);
-    LoRa.enableCrc();
+  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+  if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
+    Serial.println(F("Khong tim thay OLED"));
+    for(;;); 
   }
+  
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 0);
+  display.println("Gateway Starting...");
+  display.display();
 
-  setupWiFi();
-  secureClient.setInsecure();
-  mqtt.setServer(MQTT_HOST, MQTT_PORT);
-  mqtt.setBufferSize(512);
-  mqttReconnect();
+  Serial.println();
+  Serial.print("Connecting to WiFi: "); Serial.println(ssid);
+  
+  WiFi.begin(ssid, pass);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500); 
+    Serial.print(".");
+  }
+  Serial.println(" WiFi Connected!");
+  
+  // Cấu hình kết nối bảo mật TLS cho HiveMQ Cloud
+  espClient.setInsecure();
+  mqtt_client.setServer(mqtt_server, mqtt_port);
 
-  line1 = "GW Running";
-  line2 = "LoRa->MQTT";
-  line3 = "Wait RX";
-  oledShow();
+  SPI.begin(SCK_PIN, MISO_PIN, MOSI_PIN, SS_PIN);
+  pinMode(SS_PIN, OUTPUT);
+  pinMode(DIO0_PIN, INPUT);
+  
+  setupLoRa();
 }
 
 void loop() {
-  if (WiFi.status() != WL_CONNECTED) {
-    setupWiFi();
+  // Duy trì kết nối MQTT
+  if (WiFi.status() == WL_CONNECTED) {
+    if (!mqtt_client.connected()) {
+      reconnectMQTT();
+    }
+    mqtt_client.loop();
   }
-  if (!mqtt.connected()) {
-    mqttReconnect();
-  }
-  mqtt.loop();
 
-  int n = LoRa.parsePacket();
-  if (n) {
-    String s;
-    s.reserve(n + 8);
-    while (LoRa.available()) {
-      s += (char)LoRa.read();
+  // Kiểm tra cờ ngắt IRQ nhận LoRa
+  byte irqFlags = readRegister(REG_IRQ_FLAGS);
+  
+  if ((irqFlags & 0x40)) { // RX_DONE
+    writeRegister(REG_IRQ_FLAGS, 0x40); 
+    
+    int len = readRegister(REG_RX_NB_BYTES);
+    byte addr = readRegister(REG_FIFO_RX_CURRENT_ADDR);
+    writeRegister(REG_FIFO_ADDR_PTR, addr);
+    
+    for(int i=0; i<len; i++) {
+      packetBuffer[i] = readRegister(REG_FIFO);
     }
-    s.trim();
-    int rssi = LoRa.packetRssi();
-    Serial.printf("LoRa RX (%d B, RSSI %d): %s\n", n, rssi, s.c_str());
-    line3 = "RSSI " + String(rssi);
-    oledShow();
-    if (s.length() > 0) {
-      mqtt.publish(MQTT_TOPIC, s.c_str());
-      line2 = "MQTT sent";
-      line1 = s.substring(0, min(16, (int)s.length()));
-      oledShow();
+    
+    int rssi = readRegister(0x1A) - 164;
+    byte snr_raw = readRegister(0x19);
+    float snr = (int8_t)snr_raw * 0.25;
+
+    // Cập nhật OLED hiển thị thông số sóng
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.println("--- RX PACKET ---");
+    display.print("Size: "); display.print(len); display.println(" bytes");
+    display.print("RSSI: "); display.print(rssi); display.println(" dBm");
+
+    if (!(irqFlags & 0x20)) { // PayloadCRCError = 0
+       sendMqttPacket(packetBuffer, len, rssi, snr);
+    } else {
+       Serial.println("CRC Error - Dropping packet");
+       display.setCursor(0, 48);
+       display.print("CRC Error! Dropped");
+       display.display();
     }
   }
-  oledTick();
+  
+  yield();
 }

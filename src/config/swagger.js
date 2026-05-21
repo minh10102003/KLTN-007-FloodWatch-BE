@@ -7,7 +7,7 @@ const swaggerServers = [
     {
         url: '/',
         description:
-            'Cùng host (Railway): mở Swagger trên chính URL backend → Execute gọi đúng server (nên chọn mục này)'
+            'Cùng host (Render): mở Swagger trên chính URL backend → Execute gọi đúng server (nên chọn mục này)'
     },
     {
         url: 'http://localhost:3000',
@@ -18,7 +18,7 @@ const swaggerPublic = process.env.SWAGGER_PUBLIC_SERVER_URL;
 if (swaggerPublic && String(swaggerPublic).trim()) {
     swaggerServers.push({
         url: String(swaggerPublic).replace(/\/$/, ''),
-        description: 'Domain công khai của bạn (đặt SWAGGER_PUBLIC_SERVER_URL trên Railway, vd. https://xxx.up.railway.app)'
+        description: 'Domain công khai (SWAGGER_PUBLIC_SERVER_URL trên Render, vd. https://api.floodsight.id.vn)'
     });
 }
 
@@ -29,7 +29,7 @@ const options = {
             title: 'HCM Flood Warning System API',
             version: '1.0.0',
             description:
-                'API Documentation cho Hệ Thống Giám Sát Ngập Lụt TP.HCM. Trên Swagger, mục Servers phải chọn URL đúng backend (thường là / khi xem /api-docs trên Railway).',
+                'API Documentation cho Hệ Thống Giám Sát Ngập Lụt TP.HCM. Trên Swagger, mục Servers phải chọn URL đúng backend (thường là / khi xem /api-docs trên Render).',
             contact: {
                 name: 'API Support',
                 email: 'support@hcm-flood.gov.vn'

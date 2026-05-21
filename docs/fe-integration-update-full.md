@@ -141,7 +141,7 @@ Dùng để demo trên FE: sau batch, gọi lại `safe-path` và so sánh polyl
 
 ## 7. Ops (không phải API FE) — map `flood_sensor_id`
 
-Chạy bởi DevOps trong mạng Railway (vd `railway ssh`) hoặc máy có DB public:
+Chạy từ máy dev với `DATABASE_URL` Neon hoặc Render Shell:
 
 `npm run map:road-sensors -- --clear-out-of-range`
 

@@ -1,7 +1,7 @@
 const rateLimit = require('express-rate-limit');
 
 /**
- * Giới hạn POST báo cáo crowd công khai (B3). IP lấy từ req.ip (cần trust proxy trên Railway).
+ * Giới hạn POST báo cáo crowd công khai (B3). IP lấy từ req.ip (cần trust proxy trên Render).
  */
 const reportFloodLimiter = rateLimit({
     windowMs: Math.max(60_000, (parseInt(process.env.REPORT_FLOOD_WINDOW_MS, 10) || 900_000)), // mặc định 15 phút

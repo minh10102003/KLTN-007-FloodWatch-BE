@@ -1,10 +1,13 @@
 const chatRepository = require('../repositories/chatRepository');
 const geminiChatService = require('../services/geminiChatService');
+const chatAgentService = require('../services/chatAgentService');
+const { submitCrowdReport } = require('../services/crowdReportSubmitService');
 
 const chatController = {
     /**
      * POST /api/chat
      * Body: { message, history?, account_id?, area? }
+     * Trả meta.report_draft khi AI nhận diện yêu cầu tạo báo cáo (Hướng B).
      */
     postChat: async (req, res) => {
         try {
@@ -35,11 +38,19 @@ const chatController = {
                 });
             }
 
+            const intentAnalysis = await chatAgentService.analyzeReportIntent(msg);
+            let reportDraft = null;
+            if (intentAnalysis.intent === 'create_report') {
+                reportDraft = await chatAgentService.buildReportDraft(intentAnalysis);
+            }
+            const agentContextBlock = chatAgentService.buildAgentContextBlock(reportDraft);
+
             const sensorSnapshot = await chatRepository.getChatSensorSnapshot(area || null);
-            const { reply, model, sensor_count } = await geminiChatService.sendChatMessage(
+            const { reply, model, sensor_count, report_draft } = await geminiChatService.sendChatMessage(
                 msg,
                 history,
-                sensorSnapshot
+                sensorSnapshot,
+                { agentContextBlock, reportDraft }
             );
 
             res.json({
@@ -49,7 +60,9 @@ const chatController = {
                 meta: {
                     model,
                     sensor_count,
-                    account_id: accountId ? String(accountId).slice(0, 64) : undefined
+                    account_id: accountId ? String(accountId).slice(0, 64) : undefined,
+                    intent: intentAnalysis.intent,
+                    report_draft: report_draft || reportDraft || undefined
                 }
             });
         } catch (err) {
@@ -75,8 +88,38 @@ const chatController = {
     },
 
     /**
+     * POST /api/chat/confirm-report
+     * Gửi báo cáo sau khi user xác nhận bản nháp từ chat (cùng rule POST /api/report-flood).
+     */
+    confirmReport: async (req, res) => {
+        try {
+            const body = req.body || {};
+            const result = await submitCrowdReport({ user: req.user || null, body });
+            res.json({
+                success: true,
+                message: result.message,
+                reply: `✅ ${result.message} Mã báo cáo: #${result.data.id}. Trạng thái: ${result.data.validation_status}.`,
+                data: result.data,
+                timestamp: new Date().toISOString()
+            });
+        } catch (err) {
+            if (err.code === 'VALIDATION') {
+                return res.status(400).json({ success: false, error: err.message, reply: null });
+            }
+            if (err.code === 'NO_SENSOR_IN_RADIUS') {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Hiện tại khu vực chưa có máy đo, không thể xác thực',
+                    reply: null
+                });
+            }
+            console.error('[chat] confirm-report:', err.message);
+            res.status(500).json({ success: false, error: err.message, reply: null });
+        }
+    },
+
+    /**
      * GET /api/flood-status
-     * Query: area?, limit?
      */
     getFloodStatus: async (req, res) => {
         try {

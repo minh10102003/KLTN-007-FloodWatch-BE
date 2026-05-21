@@ -27,7 +27,7 @@ function shouldUseSsl(connectionString) {
     return true;
 }
 
-/** Pool từ DATABASE_URL (Neon/Railway) hoặc DB_* (local). */
+/** Pool từ DATABASE_URL (Neon) hoặc DB_* (local). */
 function buildPool() {
     const rawUrl = process.env.DATABASE_URL?.trim();
     if (rawUrl && isValidPostgresUrl(rawUrl)) {

@@ -1,6 +1,8 @@
 const express = require('express');
 const chatController = require('../controllers/chatController');
 const { chatLimiter } = require('../middleware/chatRateLimit');
+const { reportFloodLimiter } = require('../middleware/reportRateLimit');
+const { optionalAuthenticate } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -40,6 +42,40 @@ const router = express.Router();
  *         description: Chưa cấu hình GEMINI_API_KEY
  */
 router.post('/chat', chatLimiter, chatController.postChat);
+
+/**
+ * @swagger
+ * /api/chat/confirm-report:
+ *   post:
+ *     summary: Xác nhận gửi báo cáo ngập từ bản nháp chat (Hướng B)
+ *     tags: [Chat]
+ *     description: |
+ *       Sau khi POST /api/chat trả meta.report_draft.ready=true, FE gửi body xác nhận.
+ *       Cùng quy tắc POST /api/report-flood (level, lat, lng; JWT hoặc name khách).
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [level, lat, lng]
+ *             properties:
+ *               level: { type: string, enum: [Nhẹ, Trung bình, Nặng] }
+ *               lat: { type: number }
+ *               lng: { type: number }
+ *               location_description: { type: string }
+ *               content: { type: string }
+ *               name: { type: string }
+ *     responses:
+ *       200:
+ *         description: Báo cáo đã tạo
+ */
+router.post(
+    '/chat/confirm-report',
+    reportFloodLimiter,
+    optionalAuthenticate,
+    chatController.confirmReport
+);
 
 /**
  * @swagger

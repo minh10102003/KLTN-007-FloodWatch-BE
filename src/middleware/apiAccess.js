@@ -61,7 +61,7 @@ function isOptionalAuthWrite(method, path) {
         if (path === '/api/report-flood') return true;
         if (path === '/api/upload/report-image') return true;
         if (path === '/api/energy' || path === '/api/energy/') return true;
-        if (path === '/api/chat') return true;
+        if (path === '/api/chat' || path === '/api/chat/confirm-report') return true;
     }
     if (method === 'PUT' && /^\/api\/ota\/[^/]+\/status$/.test(path)) return true;
     return false;

@@ -1,12 +1,7 @@
 # ---------------------------------------------------------------------------
-# CẢNH BÁO — KLTN-007-FloodWatch-BE (API Node + MQTT + routing)
-# File này chỉ dùng khi bạn deploy MỘT SERVICE PYTHON RIÊNG (chỉ FastAPI).
-# Service API chính PHẢI build bằng Dockerfile ở GỐC repo: ./Dockerfile
-# (đã có railway.json ép dockerfilePath = "Dockerfile").
-# Nếu Railway Build trỏ nhầm vào file này → container không có Node → api.floodsight 502.
+# Chỉ dùng khi deploy SERVICE PYTHON RIÊNG trên Render (Background Worker / Web Service).
+# API Node chính: Dockerfile ở GỐC repo (./Dockerfile) hoặc Render Native `npm start`.
 # ---------------------------------------------------------------------------
-# Railway thường dùng CONTEXT = gốc repo (có package.json), dù Dockerfile nằm trong python_routing/.
-# Vì vậy mọi COPY phải tiền tố python_routing/
 FROM python:3.11-slim-bookworm
 
 WORKDIR /app
@@ -21,5 +16,5 @@ RUN python -m pip install --upgrade pip \
 
 COPY python_routing/ ./
 
-# PORT do Railway inject; config.py đọc PORT
+# Render inject PORT; config.py đọc PORT hoặc PYTHON_ROUTING_PORT
 CMD ["python", "main.py"]

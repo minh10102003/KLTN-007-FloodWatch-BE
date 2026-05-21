@@ -1,6 +1,6 @@
 /**
- * Monolith: Python routing (FastAPI) + Node server.js trong một container.
- * Render / Railway: có thể dùng script này HOẶC chỉ `npm start` (Node-only).
+ * Monolith (Docker trên Render): Python routing (FastAPI) + Node server.js trong một container.
+ * Render Web Service (Node native): thường Start Command = npm start (chỉ Node).
  *
  * Nếu Python không lên (Neon quota, lỗi DB): mặc định vẫn chạy Node để API/báo cáo/ảnh không chết.
  * Bắt buộc cả hai: PYTHON_STARTUP_REQUIRED=true
@@ -48,7 +48,7 @@ async function waitForHealth(maxSeconds = 120) {
     const url = `http://127.0.0.1:${pyPort}/health`;
     for (let i = 0; i < maxSeconds; i++) {
         if (await httpGetOk(url)) {
-            console.log('[launcher] Python routing is up.');
+            console.log('[render-start] Python routing is up.');
             return;
         }
         await new Promise((r) => setTimeout(r, 1000));
@@ -68,7 +68,7 @@ function startNode(pyProc) {
             resolve(code ?? 0);
         });
         node.on('error', (err) => {
-            console.error('[launcher] Node spawn error:', err.message);
+            console.error('[render-start] Node spawn error:', err.message);
             cleanup(pyProc);
             resolve(1);
         });
@@ -79,7 +79,7 @@ function startNode(pyProc) {
     let py = null;
 
     if (skipPython) {
-        console.log('[launcher] SKIP_PYTHON_ROUTING — chỉ chạy Node (npm start tương đương).');
+        console.log('[render-start] SKIP_PYTHON_ROUTING — chỉ chạy Node (npm start).');
         const code = await startNode(null);
         process.exit(Number(code) || 0);
         return;
@@ -96,24 +96,24 @@ function startNode(pyProc) {
     process.on('SIGTERM', onShutdown);
 
     py.on('error', (err) => {
-        console.error('[launcher] Failed to spawn Python:', err.message);
+        console.error('[render-start] Failed to spawn Python:', err.message);
         if (pythonRequired) {
             process.exit(1);
         }
-        console.warn('[launcher] Tiếp tục chỉ chạy Node; routing Python không khả dụng.');
+        console.warn('[render-start] Tiếp tục chỉ chạy Node; routing Python không khả dụng.');
         startNode(null).then((code) => process.exit(Number(code) || 0));
     });
 
     try {
         await waitForHealth();
     } catch (e) {
-        console.error('[launcher]', e.message);
+        console.error('[render-start]', e.message);
         cleanup(py);
         if (pythonRequired) {
             process.exit(1);
         }
         console.warn(
-            '[launcher] Python không sẵn sàng (vd Neon quota, DB). Node vẫn khởi động — ' +
+            '[render-start] Python không sẵn sàng (vd Neon quota, DB). Node vẫn khởi động — ' +
                 'ROUTING_LEGACY_FALLBACK=true để tìm đường fallback.'
         );
         const code = await startNode(null);

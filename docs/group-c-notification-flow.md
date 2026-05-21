@@ -170,13 +170,13 @@ Mục đích:
 
 ### Migration bắt buộc cho dedupe + thống kê
 - Local / CI: `npm run migrate:emergency-alert-send-log`
-- Railway (trong container): `railway ssh "npm run migrate:emergency-alert-send-log"`
+- Production: `npm run migrate:emergency-alert-send-log` (DATABASE_URL Neon)
 
 Nếu chưa migrate: hệ thống **vẫn gửi cảnh báo** nhưng **không dedupe** (log cảnh báo thiếu bảng).
 
 ### Migration cho Telegram từng user
 - Local: `npm run migrate:telegram-per-user`
-- Railway: `railway ssh "npm run migrate:telegram-per-user"`
+- Production: `npm run migrate:telegram-per-user` (DATABASE_URL Neon)
 
 ### Việc còn lại (tuỳ chọn, tải cao / production nặng)
 1. Queue bất đồng bộ + worker riêng (tránh chặn luồng MQTT).

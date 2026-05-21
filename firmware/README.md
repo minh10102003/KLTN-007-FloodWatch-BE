@@ -1,27 +1,26 @@
-# Firmware ESP32 – Cảm biến ngập + DHT22 (Wokwi)
+# Firmware ESP32 — LoRa + Gateway MQTT (mạch thật)
 
-- **gateway_lora_mqtt.ino**: Gateway thật — LoRa (SX127x) nhận JSON từ Node, publish MQTTS lên HiveMQ topic `hcm/flood/data`. Chân: NSS5, RST26, DIO0 4, SCK18, MISO19, MOSI23; OLED SDA21 SCL22. Sửa WiFi/MQTT trong file trước khi nạp.
-- **sensor_node_lora.ino**: Node cảm biến — đọc HC-SR04, gửi JSON qua LoRa (`sensor_id`, `value` = khoảng cách cm). Chân theo sơ đồ Node (Hình 7): LoRa NSS15, SCK18, MOSI23, MISO19, RST26, DIO04; HC-SR04 TRIG27, ECHO13; OLED SDA21 SCL22. Gateway (Hình 8) dùng NSS5 — khác Node. Đặt `SENSOR_ID` trùng DB.
-- **esp32_flood_dht22.ino**: Code Arduino cho ESP32 với HC-SR04 (mực nước) + DHT22 (nhiệt độ, độ ẩm). Gửi MQTT topic `hcm/flood/data` với payload có `sensor_id`, `value` (raw_distance), `temperature`, `humidity` (nếu đọc được).
-- **diagram.json**: Sơ đồ Wokwi (ESP32, HC-SR04, LCD I2C, DHT22). DHT22 Data nối **D4**.
+## File
 
-## Wokwi
+| File | Vai trò |
+|------|---------|
+| **gateway_lora_mqtt.ino** | Gateway ESP32 + Ra-02 (SX1278): nhận LoRa CSV từ Node → publish JSON lên HiveMQ `hcm/flood/data` (TLS 8883). OLED I2C SDA21 SCL22. LoRa: SCK18, MISO19, MOSI23, NSS5, RST26, DIO04. |
+| **sensor_node_lora.ino** | Node ESP32 + Ra-02 + JSN-SR04T: đo khoảng cách, gửi LoRa dạng `"Distance,Percent,Status"` (vd `30,81,OK`). LoRa: SCK18, MISO19, MOSI32, NSS15, RST26, DIO04. HC-SR04: TRIG27, ECHO13. |
 
-1. Tạo project mới tại [wokwi.com](https://wokwi.com) (ESP32).
-2. Thay nội dung file **diagram.json** của project bằng nội dung trong thư mục này (hoặc import diagram).
-3. Thay code **main.ino** bằng **esp32_flood_dht22.ino**.
-4. Thêm thư viện: **DHT sensor library by Adafruit** (trong Wokwi: Libraries → Add → tìm "DHT" hoặc "Adafruit DHT").
-5. Chạy simulation; MQTT sẽ gửi cả `temperature` và `humidity` khi DHT22 đọc được.
+Gateway map payload MQTT: `sensor_id` = **NODE_007**, `value` = khoảng cách cm (cột đầu CSV) — khớp bảng `sensors` trong DB Neon.
 
-## Chân nối DHT22
+## Thư viện Arduino
 
-| DHT22 | ESP32 |
-|-------|--------|
-| VCC   | 3V3    |
-| GND   | GND    |
-| SDA (Data) | **D4** (GPIO 4) |
+- Gateway: WiFi, PubSubClient, Adafruit SSD1306, Adafruit GFX, SPI, Wire
+- Node: LoRa (Sandeep Mistry), Adafruit SSD1306, Adafruit GFX, SPI, Wire
 
 ## Backend
 
-- Chạy migration: `npm run migrate:temperature-humidity` để thêm cột `temperature`, `humidity` vào bảng `flood_logs`.
-- Subscriber MQTT đã xử lý payload có `temperature`, `humidity` và lưu vào DB.
+- Topic: `hcm/flood/data`
+- `mqttService` đọc `sensor_id` + `value` (raw_distance cm), tính `water_level` = `installation_height - value`
+- DB: `sensor_id` = `NODE_007` (trước đây S02 — migration `npm run migrate:s02-node-007`)
+
+## Lưu ý
+
+- Sửa WiFi / MQTT trong **gateway_lora_mqtt.ino** trước khi nạp; không commit mật khẩu production vào repo public.
+- Node `INSTALLATION_HEIGHT` (75 cm) trên firmware có thể khác `installation_height` trong DB (150 cm) — căn chỉnh cho khớp hiện trường.

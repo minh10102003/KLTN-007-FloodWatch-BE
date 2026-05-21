@@ -3,7 +3,7 @@
  * Chạy: node scripts/runMigrationEmailOtps.js
  *
  * Kết nối DB (ưu tiên):
- * 1) DATABASE_URL — copy nguyên từ Railway Postgres (Variables → DATABASE_URL).
+ * 1) DATABASE_URL — copy connection string từ Neon Console.
  *    Nếu mật khẩu có @ # : / … phải URL-encode (vd @ → %40) hoặc dùng cách (2).
  * 2) DB_USER, DB_HOST, DB_NAME, DB_PASS, DB_PORT trong .env (không cần DATABASE_URL).
  *
@@ -29,7 +29,7 @@ function isValidPostgresUrl(str) {
     }
 }
 
-/** TCP proxy public Railway đôi khi không dùng SSL → cần ?sslmode=disable hoặc DB_SSL=false */
+/** Neon thường cần sslmode=require; nếu lỗi SSL thử DB_SSL=false (chỉ dev). */
 function shouldUseSsl(connectionString) {
     if (process.env.DB_SSL === 'false') return false;
     if ((process.env.PGSSLMODE || '').toLowerCase() === 'disable') return false;
@@ -57,7 +57,7 @@ function buildPool() {
     if (rawUrl) {
         console.warn(
             '⚠️ DATABASE_URL trong .env không phải URL hợp lệ — bỏ qua, dùng DB_USER/DB_HOST/...\n' +
-                '   (Nếu muốn dùng URL: copy nguyên từ Railway hoặc URL-encode ký tự đặc biệt trong password.)'
+                '   (Nếu muốn dùng URL: copy nguyên từ Neon hoặc URL-encode ký tự đặc biệt trong password.)'
         );
     }
     return new Pool({

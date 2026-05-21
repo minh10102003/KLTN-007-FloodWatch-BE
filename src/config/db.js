@@ -1,7 +1,7 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
-// PostgreSQL: local dùng DB_*; Railway/Heroku thường có DATABASE_URL
+// PostgreSQL: local dùng DB_*; production (Render + Neon) dùng DATABASE_URL
 const pool = process.env.DATABASE_URL
     ? new Pool({
           connectionString: process.env.DATABASE_URL,

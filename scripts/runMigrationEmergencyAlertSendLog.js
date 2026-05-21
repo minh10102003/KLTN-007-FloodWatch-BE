@@ -2,7 +2,7 @@
  * Bảng emergency_alert_send_log (dedupe cảnh báo khẩn).
  * Chạy: npm run migrate:emergency-alert-send-log
  *
- * Railway (trong container): railway ssh "npm run migrate:emergency-alert-send-log"
+ * Production: máy local + DATABASE_URL Neon, hoặc Render Shell
  */
 const fs = require('fs');
 const path = require('path');

@@ -69,7 +69,7 @@ function splitCurrentUserMessage(history, message) {
  * @param {Array} history
  * @param {object[]} sensorSnapshot
  */
-async function sendChatMessage(message, history, sensorSnapshot) {
+async function sendChatMessage(message, history, sensorSnapshot, options = {}) {
     const apiKey = getApiKey();
     if (!apiKey) {
         const err = new Error('GEMINI_API_KEY chưa được cấu hình trên server');
@@ -85,7 +85,11 @@ async function sendChatMessage(message, history, sensorSnapshot) {
     }
 
     const chatContext = buildChatContext(sensorSnapshot);
-    const systemInstruction = buildSystemPrompt(JSON.stringify(chatContext, null, 2));
+    let systemInstruction = buildSystemPrompt(JSON.stringify(chatContext, null, 2));
+    const agentBlock = options.agentContextBlock || '';
+    if (agentBlock) {
+        systemInstruction += agentBlock;
+    }
     const modelName = getModelName();
 
     const genAI = new GoogleGenerativeAI(apiKey);
@@ -101,7 +105,8 @@ async function sendChatMessage(message, history, sensorSnapshot) {
     return {
         reply: reply || '',
         model: modelName,
-        sensor_count: sensorSnapshot.length
+        sensor_count: sensorSnapshot.length,
+        report_draft: options.reportDraft || null
     };
 }
 

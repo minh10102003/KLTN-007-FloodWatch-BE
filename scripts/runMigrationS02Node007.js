@@ -1,9 +1,6 @@
 /**
- * Cập nhật DB: S01 chuyển từ giả lập (Wokwi) sang mạch thật (LoRa/MQTT).
- * Chạy: npm run migrate:s01-real
- *
- * Local: dùng .env (DB_* hoặc DATABASE_URL).
- * Production: DATABASE_URL từ Neon (Render env hoặc .env local).
+ * Đổi sensor_id S02 → NODE_007 (MQTT: {"sensor_id":"NODE_007","value":...})
+ * Chạy: npm run migrate:s02-node-007
  */
 const fs = require('fs');
 const path = require('path');
@@ -26,20 +23,35 @@ const pool = process.env.DATABASE_URL
 async function run() {
     const client = await pool.connect();
     try {
-        const sqlPath = path.join(__dirname, '..', 'database', 'migrate_sensor_s01_real.sql');
+        const sqlPath = path.join(__dirname, '..', 'database', 'migrate_sensor_s02_to_node_007.sql');
         const sql = fs.readFileSync(sqlPath, 'utf8');
         await client.query(sql);
+
         const { rows } = await client.query(
             `SELECT sensor_id, location_name, hardware_type, installation_height, is_active
-             FROM sensors WHERE sensor_id = 'S01'`
+             FROM sensors WHERE sensor_id = 'NODE_007'`
         );
         if (!rows.length) {
-            console.warn('⚠️ Không có sensor S01 trong DB. Thêm trạm (seed hoặc POST /api/sensors) rồi chạy lại migration.');
+            console.warn(
+                '⚠️ Không có NODE_007 sau migration. Kiểm tra DB có S02 hoặc chạy seed trước.'
+            );
             process.exitCode = 1;
             return;
         }
-        console.log('✅ Đã migration S01 → mạch thật (metadata).');
+
+        const s02 = await client.query(`SELECT 1 FROM sensors WHERE sensor_id = 'S02'`);
+        if (s02.rows.length) {
+            console.warn('⚠️ Vẫn còn S02 trong sensors — kiểm tra lại migration.');
+            process.exitCode = 1;
+            return;
+        }
+
+        const logs = await client.query(
+            `SELECT COUNT(*)::int AS n FROM flood_logs WHERE sensor_id = 'NODE_007'`
+        );
+        console.log('✅ S02 → NODE_007 hoàn tất.');
         console.log('   ', rows[0]);
+        console.log(`   flood_logs (NODE_007): ${logs.rows[0].n} bản ghi`);
     } catch (err) {
         console.error('❌ Lỗi:', err.message);
         process.exit(1);

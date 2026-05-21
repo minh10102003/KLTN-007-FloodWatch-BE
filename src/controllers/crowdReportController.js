@@ -1,8 +1,7 @@
 const crowdReportModel = require('../models/crowdReportModel');
-const userModel = require('../models/userModel');
+const { submitCrowdReport } = require('../services/crowdReportSubmitService');
 const { withFullPhotoUrls } = require('../utils/photoUrl');
 const { withReportConfidence } = require('../utils/reportConfidence');
-const { emitAdminNotification } = require('../socket/adminSocket');
 
 const crowdReportController = {
     // Lấy các báo cáo từ người dân trong vòng 24 giờ qua (photo_url trả full URL)
@@ -46,97 +45,16 @@ const crowdReportController = {
     // Khách (không đăng nhập): bắt buộc gửi name trong body.
     createReport: async (req, res) => {
         try {
-            const { name, level, lng, lat, photo_url, photo_urls, location_description, content } = req.body;
-            
-            // Validate: level, lng, lat luôn bắt buộc
-            if (!level || lng == null || lat == null) {
-                return res.status(400).json({ 
-                    success: false, 
-                    error: "Thiếu thông tin bắt buộc: level, lng, lat" 
-                });
-            }
-            // Khách (không đăng nhập) bắt buộc gửi name
-            if (!req.user && !name) {
-                return res.status(400).json({ 
-                    success: false, 
-                    error: "Khách báo cáo cần nhập tên (name). Nếu đã có tài khoản, hãy đăng nhập để báo cáo không cần nhập tên." 
-                });
-            }
-            
-            // Validate flood_level
-            const validLevels = ['Nhẹ', 'Trung bình', 'Nặng'];
-            if (!validLevels.includes(level)) {
-                return res.status(400).json({ 
-                    success: false, 
-                    error: "Mức độ ngập không hợp lệ. Chọn: Nhẹ, Trung bình, hoặc Nặng" 
-                });
-            }
-            
-            // Nội dung mô tả (tùy chọn, tối đa 500 ký tự)
-            const contentTrimmed = (content != null && typeof content === 'string') ? content.trim() : '';
-            if (contentTrimmed.length > 500) {
-                return res.status(400).json({ 
-                    success: false, 
-                    error: "Nội dung mô tả mức độ ngập tối đa 500 ký tự" 
-                });
-            }
-            
-            // Ảnh: photo_url = ảnh đầu (tương thích), photo_urls = mảng (tối đa 5)
-            const urlsArray = Array.isArray(photo_urls) ? photo_urls.filter(u => u != null && String(u).trim()) : [];
-            const photoUrlFinal = photo_url || (urlsArray[0] || null);
-            if (urlsArray.length > 5) {
-                return res.status(400).json({ 
-                    success: false, 
-                    error: "Tối đa 5 ảnh cho mỗi báo cáo" 
-                });
-            }
-            
-            // Lấy reporter_id từ token nếu user đã đăng nhập
-            const reporter_id = req.user ? String(req.user.id) : null;
-            
-            // Tên hiển thị: user đăng nhập lấy từ tài khoản (full_name hoặc username), khách lấy từ body
-            let reporter_name = name || '';
-            if (req.user) {
-                const user = await userModel.getUserById(req.user.id);
-                reporter_name = (user?.full_name && user.full_name.trim()) ? user.full_name.trim() : (user?.username || 'User');
-            }
-            
-            const result = await crowdReportModel.createReport(
-                reporter_name, 
-                reporter_id, 
-                level, 
-                lng, 
-                lat, 
-                photoUrlFinal,
-                location_description,
-                contentTrimmed || null,
-                urlsArray.length > 0 ? urlsArray : null
-            );
-            
-            emitAdminNotification({
-                type: 'report_pending',
-                reportId: result.id
-            });
-
-            let message = "Cảm ơn bạn đã báo cáo!";
-            if (result.verified_by_sensor) {
-                message = "Báo cáo của bạn đã được xác minh bởi hệ thống cảm biến. Cảm ơn!";
-            } else if (result.validation_status === 'pending') {
-                message = "Báo cáo của bạn đang được xem xét. Cảm ơn!";
-            }
-            
-            res.json({ 
-                success: true, 
-                message: message,
-                data: {
-                    id: result.id,
-                    validation_status: result.validation_status,
-                    verified_by_sensor: result.verified_by_sensor,
-                    reporter_id: reporter_id
-                }
+            const result = await submitCrowdReport({ user: req.user || null, body: req.body });
+            res.json({
+                success: true,
+                message: result.message,
+                data: result.data
             });
         } catch (err) {
-            // Đặc tả: Ngoài vùng phủ sensor → 400 với message chuẩn
+            if (err.code === 'VALIDATION') {
+                return res.status(400).json({ success: false, error: err.message });
+            }
             if (err.code === 'NO_SENSOR_IN_RADIUS') {
                 return res.status(400).json({
                     success: false,

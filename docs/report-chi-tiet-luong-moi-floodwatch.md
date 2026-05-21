@@ -311,7 +311,7 @@ Mẫu env: `.env.example`.
 
 **Fusion / forecast / heatmap / research:** So sánh response Swagger với FE; kiểm bbox và thời gian.
 
-**Cảnh báo email không tới:** (1) điều kiện ngưỡng + velocity; (2) sensor trong `GREATEST(radius,2000)m` của **điểm ghim**; (3) `notification_methods` có `email`; (4) Resend env; (5) cooldown; (6) log Railway `📢` / `Notify failed`.
+**Cảnh báo email không tới:** (1) điều kiện ngưỡng + velocity; (2) sensor trong `GREATEST(radius,2000)m` của **điểm ghim**; (3) `notification_methods` có `email`; (4) Resend env; (5) cooldown; (6) log Render `📢` / `Notify failed`.
 
 **Telegram:** `getWebhookInfo`; secret header; user đã `/start` với token; subscription có `telegram`.
 

@@ -48,14 +48,12 @@ DB_NAME = _str("DB_NAME", "hcm_flood_db")
 DB_USER = _str("DB_USER", "postgres")
 DB_PASS = _str("DB_PASS", "")
 
-# DATABASE_URL takes precedence if set (e.g. on Railway)
+# DATABASE_URL takes precedence if set (Neon on Render / local)
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 # ── Python Routing Service ────────────────────────────────────────────────────
-# Railway inject PORT cho process chính (thường là Node). Khi chạy monolith
-# (Node + Python cùng container), Python PHẢI dùng PYTHON_ROUTING_PORT (vd 8001),
-# không được trùng PORT của Express.
-# Service Python riêng: không set PYTHON_ROUTING_PORT, để Railway PORT map vào uvicorn.
+# Render inject PORT cho Web Service. Monolith Docker: Python dùng PYTHON_ROUTING_PORT (vd 8001).
+# Service Python riêng: không set PYTHON_ROUTING_PORT → uvicorn dùng PORT của Render.
 if os.getenv("PYTHON_ROUTING_PORT") is not None and str(os.getenv("PYTHON_ROUTING_PORT")).strip() != "":
     PYTHON_ROUTING_PORT = _int("PYTHON_ROUTING_PORT", 8001)
 else:
