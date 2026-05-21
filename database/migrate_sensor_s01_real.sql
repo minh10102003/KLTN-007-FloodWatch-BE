@@ -7,7 +7,7 @@
 -- -----------------------------------------------------------------------------
 
 UPDATE sensors SET
-    location_name = 'Nguyễn Hữu Cảnh - S01 (mạch thật LoRa/MQTT)',
+    location_name = 'Trạm Xô Viết Nghệ Tĩnh',
     hardware_type = 'Real_ESP32_LoRa',
     model = 'HC-SR04',
     installation_date = COALESCE(installation_date, DATE '2024-01-01'),

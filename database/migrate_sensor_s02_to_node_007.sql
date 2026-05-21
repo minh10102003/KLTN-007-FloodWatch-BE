@@ -27,7 +27,7 @@ INSERT INTO sensors (
 )
 SELECT
     'NODE_007',
-    'Bình Quới (P.28) - NODE_007 (LoRa/MQTT)',
+    'Trạm Bình Quới',
     coords,
     'Real_LoRa_Node',
     model,
@@ -48,7 +48,7 @@ WHERE sensor_id = 'S02'
 
 -- 2) Cập nhật metadata nếu NODE_007 đã tồn tại
 UPDATE sensors SET
-    location_name = 'Bình Quới (P.28) - NODE_007 (LoRa/MQTT)',
+    location_name = 'Trạm Bình Quới',
     hardware_type = 'Real_LoRa_Node',
     is_active = TRUE,
     installation_height = COALESCE(NULLIF(installation_height, 0), 75.0)
