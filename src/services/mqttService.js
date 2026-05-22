@@ -7,6 +7,7 @@ const emergencySubscriptionRepository = require('../repositories/emergencySubscr
 const emergencyAlertSendLogRepository = require('../repositories/emergencyAlertSendLogRepository');
 const emergencyNotificationService = require('./emergencyNotificationService');
 const { determineStatusFromLevel } = require('./floodStatusService');
+const { computeWaterLevelFromDistance } = require('../utils/ultrasonicWaterLevel');
 const { emitAdminNotification } = require('../socket/adminSocket');
 
 /** Khoảng cách thô từ node (cm) — chỉ lưu DB, không dùng tính mực nước. */
@@ -30,6 +31,36 @@ const parseWaterLevelFromPayload = (data) => {
     }
     return Math.round(wl * 100) / 100;
 };
+
+/** Fallback khi gateway cũ chỉ gửi value (khoảng cách cm). */
+async function resolveWaterLevel(sensorId, data) {
+    const fromDevice = parseWaterLevelFromPayload(data);
+    if (fromDevice != null) {
+        return { waterLevel: fromDevice, rawDistance: parseRawDistance(data.value) };
+    }
+
+    const rawDistance = parseRawDistance(data.value);
+    if (rawDistance == null) {
+        return { waterLevel: null, rawDistance: null };
+    }
+
+    const installationHeight = await sensorRepository.getInstallationHeight(sensorId);
+    if (!installationHeight) {
+        return { waterLevel: null, rawDistance };
+    }
+
+    const level = computeWaterLevelFromDistance(rawDistance, {
+        installationHeightCm: installationHeight
+    });
+    if (level.zone === 'invalid') {
+        return { waterLevel: null, rawDistance };
+    }
+
+    console.log(
+        `ℹ️ [WaterLevel] ${sensorId}: thiếu water_level trong MQTT — tính fallback ${level.water_level_cm}cm`
+    );
+    return { waterLevel: level.water_level_cm, rawDistance };
+}
 
 /** Khóa idempotent: ưu tiên msg_id / seq từ thiết bị; không có thì hash (sensor + giây + raw cm). */
 function buildMqttIngestKey(sensorId, data, rawDistanceForDedupe) {
@@ -182,19 +213,17 @@ const init = () => {
                 return;
             }
 
-            // 2. Mực nước do node tính sẵn (gateway gửi water_level trong JSON)
-            const waterLevel = parseWaterLevelFromPayload(data);
-            if (waterLevel == null) {
-                console.log(`⚠️ [WaterLevel] Missing or invalid water_level from ${sensor_id}`);
-                return;
-            }
-
-            const rawDistance = parseRawDistance(value);
-
-            // 3. Sensor phải tồn tại và active
+            // 3. Sensor phải tồn tại và active (trước khi resolve mực nước — cần installation_height fallback)
             const sensor = await sensorRepository.getSensorById(sensor_id);
             if (!sensor) {
                 console.log(`⚠️ [Sensor] Sensor ${sensor_id} not found or inactive`);
+                return;
+            }
+
+            // 2. Mực nước: ưu tiên từ node; gateway cũ chỉ có value → fallback H − distance
+            const { waterLevel, rawDistance } = await resolveWaterLevel(sensor_id, data);
+            if (waterLevel == null) {
+                console.log(`⚠️ [WaterLevel] Missing or invalid water_level from ${sensor_id}`);
                 return;
             }
 
@@ -216,13 +245,15 @@ const init = () => {
                 humidity: humidity != null ? parseFloat(humidity) : undefined,
                 ingest_key
             });
+            // 7. Luôn refresh last_data_time (tránh offline khi dedupe hoặc gói trùng giây)
+            await updateSensorHealth(sensor_id, status);
+
             if (!log) {
-                console.log(`🔁 [MQTT] Dedupe skip ${sensor_id} (${ingest_key.slice(0, 8)}…)`);
+                console.log(
+                    `🔁 [MQTT] Dedupe skip ${sensor_id} (${ingest_key.slice(0, 8)}…) — đã cập nhật last_data_time`
+                );
                 return;
             }
-
-            // 7. Cập nhật health check cho sensor
-            await updateSensorHealth(sensor_id, status);
             
             // 8. Tạo alert nếu vượt ngưỡng (trigger sẽ tự động tạo alert, nhưng có thể gửi thông báo khẩn)
             if (status === 'danger' || (status === 'warning' && velocity && velocity > 5)) {

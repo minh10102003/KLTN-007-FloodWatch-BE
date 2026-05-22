@@ -55,6 +55,9 @@ PubSubClient mqtt_client(espClient);
 #define SPREADING  7          
 #define BANDWIDTH  125E3      
 
+// Khớp bảng sensors trên Neon: S03 = Bình Quới, NODE_007 = Vườn Lài
+#define MQTT_SENSOR_ID "S03"
+
 // =========================================================================
 // THANH GHI SX1278 (GIỮ NGUYÊN)
 // =========================================================================
@@ -204,7 +207,7 @@ void sendMqttPacket(char *data, int len, int rssi, float snr) {
   }
 
   // 3. Khai báo ID trạm và tạo chuỗi JSON Payload (BE dùng water_level trực tiếp)
-  String sensor_id = "S03"; // Trạm Bình Quới — khớp DB & HiveMQ
+  String sensor_id = MQTT_SENSOR_ID;
   String payload = "{\"sensor_id\": \"" + sensor_id + "\", \"value\":" + String(fake_distance) +
                    ", \"water_level\":" + String(water_level_cm, 1);
   if (deviceZone.length() > 0) {

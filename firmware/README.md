@@ -23,4 +23,6 @@ Gateway map payload MQTT: `sensor_id` = **S03**, `value` = khoảng cách cm, `w
 ## Lưu ý
 
 - Sửa WiFi / MQTT trong **gateway_lora_mqtt.ino** trước khi nạp; không commit mật khẩu production vào repo public.
-- Trạm Bình Quới: MQTT `sensor_id` = **`S03`**, `installation_height` = **75 cm** trên Neon (`src/utils/ultrasonicWaterLevel.js`).
+- **`MQTT_SENSOR_ID`** trong gateway phải trùng trạm trên bản đồ: `S03` = Bình Quới, `NODE_007` = Vườn Lài. Gửi `S03` nhưng xem `NODE_007` trên FE → hiển thị **Mất kết nối**.
+- Payload MQTT cần có `water_level` (gateway mới). BE cũ chỉ có `value` vẫn chạy nhờ fallback.
+- Dashboard **offline** sau ~5 phút không có `last_data_time` (cron health check). Backend Render phải chạy và subscribe HiveMQ.
