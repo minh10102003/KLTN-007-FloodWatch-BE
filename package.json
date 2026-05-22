@@ -23,6 +23,7 @@
     "migrate:s01-real": "node scripts/runMigrationS01RealHardware.js",
     "migrate:s02-node-007": "node scripts/runMigrationS02Node007.js",
     "migrate:node-007-height-75": "node scripts/runMigrationNode007Height75.js",
+    "migrate:installation-height-75-all": "node scripts/runMigrationAllInstallationHeight75.js",
     "migrate:sensor-display-names": "node scripts/runMigrationSensorDisplayNames.js",
     "migrate:swap-s03-node007": "node scripts/runMigrationSwapS03Node007.js",
     "migrate:s01-height-100": "node scripts/runMigrationS01Height100.js",

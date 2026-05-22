@@ -71,7 +71,7 @@ SET
     coords = ST_SetSRID(ST_MakePoint(106.692, 10.848), 4326)::geography,
     hardware_type = 'Wokwi_ESP32',
     model = 'HC-SR04',
-    installation_height = 150.0
+    installation_height = 75.0
 WHERE sensor_id = 'NODE_007';
 
 INSERT INTO sensor_thresholds (sensor_id, warning_threshold, danger_threshold, updated_by)
