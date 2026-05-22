@@ -183,28 +183,38 @@ void sendMqttPacket(char *data, int len, int rssi, float snr) {
     receivedData += (char)data[i];
   }
 
-  // 2. Tách biến khoảng cách và mực nước
+  // 2. Tách CSV từ Node: "Distance,WaterLevelCm,Percent,Status"
   int fake_distance = 0;
-  int water_level = 0;
-  
+  float water_level_cm = 0.0;
+  String deviceZone = "";
+
   int firstComma = receivedData.indexOf(',');
   int secondComma = receivedData.indexOf(',', firstComma + 1);
-  
+  int thirdComma = receivedData.indexOf(',', secondComma + 1);
+
   if (firstComma != -1 && secondComma != -1) {
     fake_distance = receivedData.substring(0, firstComma).toInt();
-    water_level = receivedData.substring(firstComma + 1, secondComma).toInt();
+    water_level_cm = receivedData.substring(firstComma + 1, secondComma).toFloat();
+    if (thirdComma != -1) {
+      deviceZone = receivedData.substring(thirdComma + 1);
+      deviceZone.trim();
+    }
   } else {
-    // Fallback nếu chuỗi không có dấu phẩy
     fake_distance = receivedData.toInt();
   }
 
-  // 3. Khai báo ID trạm và tạo chuỗi JSON Payload
+  // 3. Khai báo ID trạm và tạo chuỗi JSON Payload (BE dùng water_level trực tiếp)
   String sensor_id = "S03"; // Trạm Bình Quới — khớp DB & HiveMQ
-  String payload = "{\"sensor_id\": \"" + sensor_id + "\", \"value\":" + String(fake_distance) + "}";
+  String payload = "{\"sensor_id\": \"" + sensor_id + "\", \"value\":" + String(fake_distance) +
+                   ", \"water_level\":" + String(water_level_cm, 1);
+  if (deviceZone.length() > 0) {
+    payload += ", \"zone\":\"" + deviceZone + "\"";
+  }
+  payload += "}";
 
-  // 4. In log ra Serial chuẩn theo yêu cầu của bạn
+  // 4. In log ra Serial
   Serial.print("["); Serial.print(sensor_id); Serial.print("] raw_distance: ");
-  Serial.print(fake_distance); Serial.print("cm, water_level: "); Serial.print(water_level); Serial.println("cm");
+  Serial.print(fake_distance); Serial.print("cm, water_level: "); Serial.print(water_level_cm, 1); Serial.println("cm");
 
   // 5. Gửi lên MQTT Broker
   if (mqtt_client.connected()) {

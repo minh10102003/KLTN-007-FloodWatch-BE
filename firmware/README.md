@@ -5,9 +5,9 @@
 | File | Vai trò |
 |------|---------|
 | **gateway_lora_mqtt.ino** | Gateway ESP32 + Ra-02 (SX1278): nhận LoRa CSV từ Node → publish JSON lên HiveMQ `hcm/flood/data` (TLS 8883). OLED I2C SDA21 SCL22. LoRa: SCK18, MISO19, MOSI23, NSS5, RST26, DIO04. |
-| **sensor_node_lora.ino** | Node ESP32 + Ra-02 + JSN-SR04T: đo khoảng cách, gửi LoRa dạng `"Distance,Percent,Status"` (vd `30,81,OK`). LoRa: SCK18, MISO19, MOSI32, NSS15, RST26, DIO04. HC-SR04: TRIG27, ECHO13. |
+| **sensor_node_lora.ino** | Node: median + Kalman, tính mực nước (cm), gửi LoRa `"Distance,WaterLevelCm,Percent,Status"` (vd `50,25.0,45,NORMAL`). |
 
-Gateway map payload MQTT: `sensor_id` = **NODE_007**, `value` = khoảng cách cm (cột đầu CSV) — khớp bảng `sensors` trong DB Neon.
+Gateway map payload MQTT: `sensor_id` = **S03**, `value` = khoảng cách cm, `water_level` = mực nước cm (cột 2 CSV), tùy chọn `zone` (cột 4).
 
 ## Thư viện Arduino
 
@@ -17,8 +17,8 @@ Gateway map payload MQTT: `sensor_id` = **NODE_007**, `value` = khoảng cách c
 ## Backend
 
 - Topic: `hcm/flood/data`
-- `mqttService` đọc `sensor_id` + `value` (raw_distance cm), tính `water_level` = `installation_height - value`
-- DB: `sensor_id` = `NODE_007` (trước đây S02 — migration `npm run migrate:s02-node-007`)
+- `mqttService` đọc `sensor_id`, `water_level` (cm, từ node), `value` (raw_distance, lưu DB); không tính lại mực nước trên BE
+- DB: `sensor_id` = **S03** (Bình Quới)
 
 ## Lưu ý
 

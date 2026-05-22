@@ -6,29 +6,29 @@ const alertRepository = require('../repositories/alertRepository');
 const emergencySubscriptionRepository = require('../repositories/emergencySubscriptionRepository');
 const emergencyAlertSendLogRepository = require('../repositories/emergencyAlertSendLogRepository');
 const emergencyNotificationService = require('./emergencyNotificationService');
-const { KalmanFilter } = require('./kalmanFilterService');
 const { determineStatusFromLevel } = require('./floodStatusService');
-const { computeWaterLevelFromDistance } = require('../utils/ultrasonicWaterLevel');
 const { emitAdminNotification } = require('../socket/adminSocket');
 
-// Lưu trữ Kalman filter cho mỗi sensor
-const kalmanFilters = {};
-
-// Hàm lọc nhiễu dữ liệu - loại bỏ giá trị đột biến
-const filterNoise = (rawDistance) => {
-    // Loại bỏ giá trị <= 0 hoặc > 500cm (giá trị không hợp lý)
-    if (rawDistance <= 0 || rawDistance > 500) {
+/** Khoảng cách thô từ node (cm) — chỉ lưu DB, không dùng tính mực nước. */
+const parseRawDistance = (value) => {
+    const d = Number(value);
+    if (!Number.isFinite(d) || d <= 0 || d > 500) {
         return null;
     }
-    return rawDistance;
+    return Math.round(d * 100) / 100;
 };
 
-// Hàm lọc nhiễu bằng Kalman Filter
-const filterWithKalman = (sensorId, rawDistance) => {
-    if (!kalmanFilters[sensorId]) {
-        kalmanFilters[sensorId] = new KalmanFilter(0.01, 0.25);
+/** Mực nước (cm) do firmware node tính sẵn, gateway forward qua MQTT. */
+const parseWaterLevelFromPayload = (data) => {
+    const raw = data.water_level ?? data.waterLevel;
+    if (raw == null || raw === '') {
+        return null;
     }
-    return kalmanFilters[sensorId].filter(rawDistance);
+    const wl = Number(raw);
+    if (!Number.isFinite(wl) || wl < 0 || wl > 500) {
+        return null;
+    }
+    return Math.round(wl * 100) / 100;
 };
 
 /** Khóa idempotent: ưu tiên msg_id / seq từ thiết bị; không có thì hash (sensor + giây + raw cm). */
@@ -165,58 +165,50 @@ const init = () => {
     client.on('message', async (topic, message) => {
         try {
             const data = JSON.parse(message.toString());
-            const { sensor_id, value, checksum, timestamp, temperature, humidity } = data;
-            
+            const { sensor_id, value, checksum, timestamp, temperature, humidity, zone } = data;
+
             // 1. Kiểm tra checksum (nếu có)
-            if (checksum && !validateChecksum({ sensor_id, value, timestamp }, checksum)) {
+            if (
+                checksum &&
+                !validateChecksum({ sensor_id, value, water_level: data.water_level, timestamp }, checksum)
+            ) {
                 console.log(`⚠️ [Checksum] Invalid checksum from ${sensor_id}`);
                 return;
             }
-            
-            // value từ ESP32 là raw_distance (khoảng cách đo được)
-            const rawDistance = parseFloat(value);
-            
-            // 2. Lọc nhiễu dữ liệu cơ bản
-            const basicFiltered = filterNoise(rawDistance);
-            if (!basicFiltered) {
-                console.log(`⚠️ [Filter] Rejected noise data from ${sensor_id}: ${rawDistance}cm`);
+
+            const deviceZone = zone != null ? String(zone).toUpperCase() : '';
+            if (deviceZone === 'INVALID') {
+                console.log(`⚠️ [WaterLevel] INVALID zone from ${sensor_id}`);
                 return;
             }
 
-            // 3. Lọc nhiễu bằng Kalman Filter
-            const filteredDistance = filterWithKalman(sensor_id, basicFiltered);
+            // 2. Mực nước do node tính sẵn (gateway gửi water_level trong JSON)
+            const waterLevel = parseWaterLevelFromPayload(data);
+            if (waterLevel == null) {
+                console.log(`⚠️ [WaterLevel] Missing or invalid water_level from ${sensor_id}`);
+                return;
+            }
 
-            // 4. Lấy thông tin sensor để tính mực nước
-            const installationHeight = await sensorRepository.getInstallationHeight(sensor_id);
+            const rawDistance = parseRawDistance(value);
 
-            if (!installationHeight) {
+            // 3. Sensor phải tồn tại và active
+            const sensor = await sensorRepository.getSensorById(sensor_id);
+            if (!sensor) {
                 console.log(`⚠️ [Sensor] Sensor ${sensor_id} not found or inactive`);
                 return;
             }
-            
-            // 5. Tính mực nước (cm) theo sơ đồ ống: H_sensor − distance, vùng mù & khô
-            const levelResult = computeWaterLevelFromDistance(filteredDistance, {
-                installationHeightCm: installationHeight
-            });
-            const waterLevel = levelResult.water_level_cm;
-            if (levelResult.zone === 'invalid') {
-                console.log(
-                    `⚠️ [WaterLevel] Invalid distance from ${sensor_id}: ${filteredDistance}cm`
-                );
-                return;
-            }
-            
-            // 6. Tính vận tốc nước dâng
+
+            // 4. Tính vận tốc nước dâng
             const velocity = await calculateVelocity(sensor_id, waterLevel);
             
-            // 7. Xác định trạng thái
+            // 5. Xác định trạng thái
             const status = await determineStatus(sensor_id, waterLevel);
-            
-            // 8. Lưu vào flood_logs (idempotent theo ingest_key — trùng MQTT bỏ qua)
-            const ingest_key = buildMqttIngestKey(sensor_id, data, basicFiltered);
+
+            // 6. Lưu vào flood_logs (idempotent theo ingest_key — trùng MQTT bỏ qua)
+            const ingest_key = buildMqttIngestKey(sensor_id, data, waterLevel);
             const log = await floodRepository.createFloodLog({
                 sensor_id,
-                raw_distance: filteredDistance,
+                raw_distance: rawDistance ?? undefined,
                 water_level: waterLevel,
                 velocity,
                 status,
@@ -229,14 +221,12 @@ const init = () => {
                 return;
             }
 
-            // 9. Cập nhật health check cho sensor
+            // 7. Cập nhật health check cho sensor
             await updateSensorHealth(sensor_id, status);
             
-            // 10. Tạo alert nếu vượt ngưỡng (trigger sẽ tự động tạo alert, nhưng có thể gửi thông báo khẩn)
+            // 8. Tạo alert nếu vượt ngưỡng (trigger sẽ tự động tạo alert, nhưng có thể gửi thông báo khẩn)
             if (status === 'danger' || (status === 'warning' && velocity && velocity > 5)) {
                 try {
-                    // Lấy thông tin sensor để gửi thông báo
-                    const sensor = await sensorRepository.getSensorById(sensor_id);
                     if (sensor) {
                         // Tìm users cần nhận cảnh báo trong bán kính
                         const subscribers = await emergencySubscriptionRepository.findUsersInAlertRadius(
