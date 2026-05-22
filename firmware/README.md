@@ -23,4 +23,4 @@ Gateway map payload MQTT: `sensor_id` = **NODE_007**, `value` = khoảng cách c
 ## Lưu ý
 
 - Sửa WiFi / MQTT trong **gateway_lora_mqtt.ino** trước khi nạp; không commit mật khẩu production vào repo public.
-- Node firmware `INSTALLATION_HEIGHT` = **75 cm** → cập nhật `sensors.installation_height = 75` cho `NODE_007` trên Neon để BE tính `water_level` khớp thực tế (`src/utils/ultrasonicWaterLevel.js`).
+- Trạm Bình Quới: MQTT `sensor_id` = **`S03`**, `installation_height` = **75 cm** trên Neon (`src/utils/ultrasonicWaterLevel.js`).

@@ -199,7 +199,7 @@ void sendMqttPacket(char *data, int len, int rssi, float snr) {
   }
 
   // 3. Khai báo ID trạm và tạo chuỗi JSON Payload
-  String sensor_id = "NODE_007"; // Đặt ID tĩnh hoặc lấy từ biến cấu hình
+  String sensor_id = "S03"; // Trạm Bình Quới — khớp DB & HiveMQ
   String payload = "{\"sensor_id\": \"" + sensor_id + "\", \"value\":" + String(fake_distance) + "}";
 
   // 4. In log ra Serial chuẩn theo yêu cầu của bạn
