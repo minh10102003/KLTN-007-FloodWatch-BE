@@ -27,6 +27,8 @@
     "migrate:sensor-display-names": "node scripts/runMigrationSensorDisplayNames.js",
     "migrate:swap-s03-node007": "node scripts/runMigrationSwapS03Node007.js",
     "migrate:s01-height-100": "node scripts/runMigrationS01Height100.js",
+    "migrate:s01-height-150": "node scripts/runMigrationS01Height150.js",
+    "migrate:s01-location": "node scripts/runMigrationS01Location.js",
     "migrate:user-last-location": "node scripts/runMigrationUserLastLocation.js",
     "migrate:flood-ingest-key": "node scripts/runMigrationFloodLogsIngestKey.js",
     "migrate:emergency-alert-send-log": "node scripts/runMigrationEmergencyAlertSendLog.js",

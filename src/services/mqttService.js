@@ -19,26 +19,11 @@ const parseRawDistance = (value) => {
     return Math.round(d * 100) / 100;
 };
 
-/** Mực nước (cm) do firmware node tính sẵn, gateway forward qua MQTT. */
-const parseWaterLevelFromPayload = (data) => {
-    const raw = data.water_level ?? data.waterLevel;
-    if (raw == null || raw === '') {
-        return null;
-    }
-    const wl = Number(raw);
-    if (!Number.isFinite(wl) || wl < 0 || wl > 500) {
-        return null;
-    }
-    return Math.round(wl * 100) / 100;
-};
-
-/** Fallback khi gateway cũ chỉ gửi value (khoảng cách cm). */
+/**
+ * Tính mực nước từ khoảng cách siêu âm (value = cm tới vật cản).
+ * Firmware chỉ gửi distance; BE dùng installation_height trong DB.
+ */
 async function resolveWaterLevel(sensorId, data) {
-    const fromDevice = parseWaterLevelFromPayload(data);
-    if (fromDevice != null) {
-        return { waterLevel: fromDevice, rawDistance: parseRawDistance(data.value) };
-    }
-
     const rawDistance = parseRawDistance(data.value);
     if (rawDistance == null) {
         return { waterLevel: null, rawDistance: null };
@@ -56,9 +41,6 @@ async function resolveWaterLevel(sensorId, data) {
         return { waterLevel: null, rawDistance };
     }
 
-    console.log(
-        `ℹ️ [WaterLevel] ${sensorId}: thiếu water_level trong MQTT — tính fallback ${level.water_level_cm}cm`
-    );
     return { waterLevel: level.water_level_cm, rawDistance };
 }
 
@@ -223,7 +205,15 @@ const init = () => {
             // 2. Mực nước: ưu tiên từ node; gateway cũ chỉ có value → fallback H − distance
             const { waterLevel, rawDistance } = await resolveWaterLevel(sensor_id, data);
             if (waterLevel == null) {
-                console.log(`⚠️ [WaterLevel] Missing or invalid water_level from ${sensor_id}`);
+                const rawVal = data.value ?? data.distance;
+                if (rawVal === 0 || rawVal === '0') {
+                    console.log(
+                        `⚠️ [WaterLevel] ${sensor_id}: value=0 — BE không lưu (cảm biến lỗi hoặc chưa đo được). ` +
+                            'Cần value > 0 (cm) hoặc water_level trong JSON. Nạp lại gateway + node mới.'
+                    );
+                } else {
+                    console.log(`⚠️ [WaterLevel] Missing or invalid water_level from ${sensor_id}`);
+                }
                 return;
             }
 

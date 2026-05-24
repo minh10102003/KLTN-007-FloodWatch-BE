@@ -1,0 +1,325 @@
+@startuml HCM_Flood_Class_Diagram
+title HCM Flood Backend - Class Diagram (UML chuan, duong thang goc vuong)
+
+hide circle
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+skinparam ArrowColor #1B2838
+skinparam ArrowThickness 1
+skinparam RankSep 55
+skinparam Nodesep 40
+skinparam ClassBorderColor #1565C0
+skinparam ClassFontColor #000000
+skinparam ClassBackgroundColor #EBF5FB
+skinparam ClassHeaderBackgroundColor #90CAF9
+
+top to bottom direction
+
+' =============================================================================
+' CHU THICH 4 QUAN HE (giong bang mau slide)
+' Dependency      : ..>     (net dut, mui ten rong)
+' Realization     : ..|>    (net dut, mui ten tam giac rong)
+' Aggregation     : o--     (net lien, kim cuong rong)
+' Composition     : *--     (net lien, kim cuong dac)
+' Them: Association --> / --  |  Generalization <|--
+' =============================================================================
+
+legend top left
+  |= Quan he UML |= Ky hieu PlantUML |= Vi du trong HCM Flood |
+  | <b>Dependency</b> | <color:#1565C0>..></color> | UserModel ..> TokenService |
+  | <b>Realization</b> | <color:#1565C0>..|></color> | RoutingService ..|> ISafePathFinder |
+  | <b>Aggregation</b> | <color:#1565C0>o--</color> | GraphSnapshot o-- Edge |
+  | <b>Composition</b> | <color:#1565C0>*--</color> | GraphCache *-- GraphSnapshot |
+  | Association | --> | AuthController --> UserModel |
+  | Generalization | <|-- | BaseRepository <|-- FloodRepository |
+endlegend
+
+' =============================================================================
+' TANG NGOAI (Database, MQTT)
+' =============================================================================
+class PostgreSQL <<database>> {
+  -engine : string
+}
+
+class PgPool <<external>> {
+}
+
+class HiveMQ <<external>> {
+  -topic : string
+}
+
+PgPool "1" -- "1" PostgreSQL
+BaseRepository "1" --> "1" PgPool
+
+' =============================================================================
+' COT 1: XAC THUC (doc trai -> phai, giong Customer - Order - OrderDetail)
+' =============================================================================
+class AuthController <<controller>> {
+  +register(req, res)
+  +login(req, res)
+  +refresh(req, res)
+  +getProfile(req, res)
+}
+
+class UserModel <<model>> {
+  +register(userData)
+  +login(username, password)
+  +refreshTokens(sessionToken, refreshToken)
+  +getUserById(userId)
+}
+
+class UserRepository {
+  -pool : PgPool
+  +findByEmail(email)
+  +findById(userId)
+  +createUser(userData)
+  +updateUser(userId, data)
+}
+
+class UserSessionRepository {
+  +createSession(userId, hash, expiresAt)
+  +findById(sessionId)
+  +revokeSession(sessionId)
+}
+
+AuthController "1" --> "1" UserModel : <<use>>
+UserModel "1" --> "1" UserRepository
+UserModel "1" --> "0..1" UserSessionRepository
+
+class TokenService <<service>> {
+  +signAccessToken(claims)
+  +verifyAccessToken(token)
+  +generateRefreshToken()
+}
+
+class OtpService <<service>> {
+  +sendOtp(email)
+  +verifyOtp(email, code)
+}
+
+UserModel ..> TokenService : <<use>>
+UserModel ..> OtpService : <<use>>
+
+' =============================================================================
+' COT 2: CAM BIEN / LICH SU NGAP (giua)
+' =============================================================================
+class FloodController <<controller>> {
+  +getRealTimeFloodData(req, res)
+  +getFloodData(req, res)
+  +getFloodHistory(req, res)
+}
+
+class FloodModel <<model>> {
+  +getRealTimeFloodData()
+  +getFloodDataWithSensors()
+  +getFloodHistoryBySensor(sensorId, limit)
+}
+
+class FloodRepository {
+  +getRealTimeFloodData()
+  +createFloodLog(floodData)
+  +getFloodHistoryBySensor(sensorId, limit)
+  +getHeatmapData(bounds, gridSize)
+}
+
+FloodController "1" --> "1" FloodModel
+FloodModel "1" --> "1" FloodRepository
+
+class SensorController <<controller>> {
+  +getAllSensors(req, res)
+  +createSensor(req, res)
+  +updateSensor(req, res)
+}
+
+class SensorModel <<model>> {
+  +getAllSensors()
+  +getSensorById(sensorId)
+  +createSensor(sensorData)
+}
+
+class SensorRepository {
+  +getAllSensors()
+  +getSensorById(sensorId)
+  +createSensor(sensorData)
+  +checkSensorHealth()
+}
+
+SensorController "1" --> "1" SensorModel
+SensorModel "1" --> "1" SensorRepository
+
+' Aggregation: Sensor "owns" flood logs conceptually via sensor_id
+SensorRepository "1" o-- "0..*" FloodRepository : flood_logs
+
+' =============================================================================
+' COT 3: ROUTING (phai)
+' =============================================================================
+class RoutingController <<controller>> {
+  +getSafePath(req, res)
+  +updateManualFloodDepthBatch(req, res)
+}
+
+interface ISafePathFinder <<interface>> {
+  +findSafePath(params)
+}
+
+class RoutingService <<service>> {
+  +findSafePath(params)
+}
+
+RoutingService ..|> ISafePathFinder
+
+class RoutingRepository {
+  +getNearestNode(lng, lat, maxM)
+  +getActiveEdgesWithFloodDepth(opts)
+  +updateManualFloodDepthBatch(updates)
+}
+
+class PythonRoutingAPI <<external>> {
+  +GET /safe-path
+}
+
+RoutingController "1" --> "1" RoutingService
+RoutingController "1" --> "1" RoutingRepository : admin batch
+RoutingService ..> PythonRoutingAPI : HTTP delegate
+RoutingService ..> RoutingRepository : legacy A*
+PythonRoutingAPI ..|> ISafePathFinder
+
+' =============================================================================
+' MQTT WORKER (duoi giua - nhanh doc xuong repos)
+' =============================================================================
+class MqttService <<service>> {
+  +init()
+}
+
+MqttService "1" --> "1" HiveMQ : subscribe
+MqttService "1" --> "1" FloodRepository : ghi log
+MqttService "1" --> "1" SensorRepository : health
+MqttService "1" --> "0..*" EmergencyNotificationService : canh bao
+
+class EmergencyNotificationService <<service>> {
+  +notifySubscriber(subscriber, payload, options)
+}
+
+class EmergencySubscriptionRepository {
+  +findUsersInAlertRadius(lng, lat, radius)
+}
+
+MqttService "1" --> "1" EmergencySubscriptionRepository
+
+' =============================================================================
+' KE THUA REPOSITORY (Base o tren, con xep cot - KHONG 1 hang ngang)
+' =============================================================================
+class BaseRepository {
+  -pool : PgPool
+  --
+  +query(sql, params)
+  +queryOne(sql, params)
+  +queryAll(sql, params)
+}
+
+BaseRepository <|-- UserRepository
+BaseRepository <|-- UserSessionRepository
+BaseRepository <|-- FloodRepository
+BaseRepository <|-- SensorRepository
+BaseRepository <|-- RoutingRepository
+BaseRepository <|-- AlertRepository
+BaseRepository <|-- CrowdReportRepository
+BaseRepository <|-- OtpRepository
+BaseRepository <|-- EmergencySubscriptionRepository
+
+' Layout cot repository (hidden = chi sap xep, khong ve them quan he)
+UserRepository -[hidden]right- FloodRepository
+FloodRepository -[hidden]right- SensorRepository
+SensorRepository -[hidden]right- RoutingRepository
+
+UserSessionRepository -[hidden]right- AlertRepository
+AlertRepository -[hidden]right- CrowdReportRepository
+CrowdReportRepository -[hidden]right- OtpRepository
+
+UserRepository -[hidden]down- UserSessionRepository
+FloodRepository -[hidden]down- AlertRepository
+SensorRepository -[hidden]down- CrowdReportRepository
+RoutingRepository -[hidden]down- EmergencySubscriptionRepository
+
+BaseRepository -[hidden]down- UserRepository
+BaseRepository -[hidden]down- FloodRepository
+BaseRepository -[hidden]down- SensorRepository
+BaseRepository -[hidden]down- RoutingRepository
+
+' =============================================================================
+' PYTHON ROUTING (khoi phai duoi - doc tu tren xuong)
+' =============================================================================
+together {
+  class GraphCache {
+    -_snapshot : GraphSnapshot
+    +refresh()
+    +get_nearest_nodes(lng, lat, maxM, limit)
+  }
+
+  class GraphSnapshot <<dataclass>> {
+    +adj_forward : dict
+    +adj_backward : dict
+    +node_pos : dict
+    +has_any_flood : bool
+  }
+
+  class Edge <<dataclass>> {
+    +edge_id : int
+    +from_node : int
+    +to_node : int
+    +length_m : float
+    +flood_depth_cm : float
+  }
+
+  class NodePos <<dataclass>> {
+    +lng : float
+    +lat : float
+  }
+
+  class RoutingResult <<dataclass>> {
+    +node_path : list
+    +total_cost : float
+  }
+
+  class VehicleProfile <<dataclass>> {
+    +key : str
+    +max_wading_depth_cm : float
+  }
+
+  class FloodPredictor {
+    -model
+    +is_available()
+    +predict_edge_depths()
+  }
+}
+
+GraphCache "1" *-- "1" GraphSnapshot : snapshot
+GraphSnapshot "1" o-- "1..*" Edge : adj
+GraphSnapshot "1" o-- "1..*" NodePos : positions
+
+GraphCache "1" --> "1" PostgreSQL : asyncpg
+GraphCache ..> FloodPredictor : dependency
+
+PythonRoutingAPI "1" --> "1" GraphCache
+PythonRoutingAPI ..> RoutingResult : dependency
+PythonRoutingAPI ..> VehicleProfile : dependency
+
+' =============================================================================
+' SAP XEP COT CHINH (hidden links - goc vuong)
+' =============================================================================
+AuthController -[hidden]right- FloodController
+FloodController -[hidden]right- RoutingController
+
+UserRepository -[hidden]right- FloodRepository
+FloodRepository -[hidden]right- RoutingRepository
+
+AuthController -[hidden]down- MqttService
+FloodController -[hidden]down- BaseRepository
+RoutingController -[hidden]down- GraphCache
+
+SensorController -[hidden]down- SensorModel
+SensorModel -[hidden]down- SensorRepository
+FloodController -[hidden]down- SensorController
+
+@enduml

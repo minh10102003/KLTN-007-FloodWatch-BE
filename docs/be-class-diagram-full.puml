@@ -1,0 +1,306 @@
+@startuml HCM_Flood_Class_Diagram
+title HCM Flood Backend - Class Diagram
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam linetype ortho
+hide circle
+
+class PostgreSQL <<database>> {
+  engine : PostgreSQL + PostGIS
+}
+
+class PgPool <<external>> {
+}
+
+class HiveMQ <<external>> {
+  topic : hcm/flood/data
+}
+
+' ---------- BaseRepository ----------
+class BaseRepository {
+  - pool : PgPool
+  --
+  + query(sql, params)
+  + queryOne(sql, params)
+  + queryAll(sql, params)
+}
+
+BaseRepository --> PgPool
+PgPool --> PostgreSQL
+
+' ---------- Repositories ----------
+class UserRepository {
+  + findByEmail(email)
+  + findById(userId)
+  + createUser(userData)
+  + updateUser(userId, userData)
+}
+
+class UserSessionRepository {
+  + createSession(userId, hash, expiresAt)
+  + findById(sessionId)
+  + revokeSession(sessionId)
+}
+
+class SensorRepository {
+  + getAllSensors()
+  + getSensorById(sensorId)
+  + createSensor(sensorData)
+  + updateSensor(sensorId, data)
+  + getInstallationHeight(sensorId)
+  + checkSensorHealth()
+}
+
+class FloodRepository {
+  + getRealTimeFloodData()
+  + createFloodLog(floodData)
+  + getFloodHistoryBySensor(sensorId, limit)
+  + getHeatmapData(bounds, gridSize)
+}
+
+class AlertRepository {
+  + createAlert(alertData)
+  + getActiveAlerts()
+}
+
+class CrowdReportRepository {
+  + createReport(...)
+  + moderateReport(...)
+  + getPendingModerationReports(limit)
+}
+
+class RoutingRepository {
+  + getNearestNode(lng, lat, maxDistanceMeters)
+  + getActiveEdgesWithFloodDepth(opts)
+  + updateManualFloodDepthBatch(updates)
+}
+
+class OtpRepository {
+  + createOtp(...)
+  + findLatestActiveByEmail(email, purpose)
+  + markConsumed(otpId)
+}
+
+class EmergencySubscriptionRepository {
+  + createSubscription(data)
+  + findUsersInAlertRadius(lng, lat, radius)
+}
+
+class EmergencyAlertSendLogRepository {
+  + wasSentRecently(...)
+  + recordSuccessfulSend(...)
+}
+
+class FusionRepository
+class ResearchRepository
+class EnergyRepository
+class OtaUpdateRepository
+class AccessLogRepository
+class AuditLogRepository
+class DataRetentionRepository
+class TelegramLinkRepository
+class ReportEvaluationRepository
+
+UserRepository --|> BaseRepository
+UserSessionRepository --|> BaseRepository
+SensorRepository --|> BaseRepository
+FloodRepository --|> BaseRepository
+AlertRepository --|> BaseRepository
+CrowdReportRepository --|> BaseRepository
+RoutingRepository --|> BaseRepository
+OtpRepository --|> BaseRepository
+EmergencySubscriptionRepository --|> BaseRepository
+EmergencyAlertSendLogRepository --|> BaseRepository
+FusionRepository --|> BaseRepository
+ResearchRepository --|> BaseRepository
+EnergyRepository --|> BaseRepository
+OtaUpdateRepository --|> BaseRepository
+AccessLogRepository --|> BaseRepository
+AuditLogRepository --|> BaseRepository
+DataRetentionRepository --|> BaseRepository
+TelegramLinkRepository --|> BaseRepository
+ReportEvaluationRepository --|> BaseRepository
+
+' ---------- Util ----------
+class KalmanFilter {
+  - processNoise : number
+  - measurementNoise : number
+  - estimatedValue : number
+  - errorCovariance : number
+  --
+  + filter(measurement) : number
+  + reset()
+}
+
+' ---------- Models ----------
+class UserModel <<model>> {
+  + register(userData)
+  + login(username, password)
+  + refreshTokens(sessionToken, refreshToken)
+  + getUserById(userId)
+}
+
+class FloodModel <<model>> {
+  + getRealTimeFloodData()
+  + getFloodDataWithSensors()
+  + getFloodHistoryBySensor(sensorId, limit)
+}
+
+class SensorModel <<model>> {
+  + getAllSensors()
+  + createSensor(sensorData)
+  + updateSensor(sensorId, data)
+}
+
+UserModel ..> UserRepository
+UserModel ..> UserSessionRepository
+FloodModel ..> FloodRepository
+SensorModel ..> SensorRepository
+
+' ---------- Services ----------
+class TokenService <<service>> {
+  + signAccessToken(claims)
+  + verifyAccessToken(token)
+  + generateRefreshToken()
+  + hashRefreshToken(token)
+}
+
+class OtpService <<service>> {
+  + sendOtp(email)
+  + verifyOtp(email, code)
+}
+
+class RoutingService <<service>> {
+  + findSafePath(params)
+}
+
+class MqttService <<service>> {
+  + init()
+}
+
+class EmergencyNotificationService <<service>> {
+  + notifySubscriber(subscriber, payload, options)
+}
+
+class PythonRoutingAPI <<external>> {
+  GET /api/v1/routing/safe-path
+}
+
+RoutingService ..> RoutingRepository : legacy
+RoutingService ..> PythonRoutingAPI : HTTP primary
+MqttService ..> FloodRepository
+MqttService ..> SensorRepository
+MqttService ..> EmergencySubscriptionRepository
+MqttService ..> EmergencyNotificationService
+MqttService ..> HiveMQ
+
+' ---------- Controllers ----------
+class AuthController <<controller>> {
+  + register(req, res)
+  + login(req, res)
+  + refresh(req, res)
+  + getProfile(req, res)
+}
+
+class FloodController <<controller>> {
+  + getRealTimeFloodData(req, res)
+  + getFloodData(req, res)
+  + getFloodHistory(req, res)
+}
+
+class SensorController <<controller>> {
+  + getAllSensors(req, res)
+  + createSensor(req, res)
+  + updateSensor(req, res)
+}
+
+class RoutingController <<controller>> {
+  + getSafePath(req, res)
+  + updateManualFloodDepthBatch(req, res)
+}
+
+AuthController ..> UserModel
+AuthController ..> TokenService
+AuthController ..> OtpService
+FloodController ..> FloodModel
+SensorController ..> SensorModel
+RoutingController ..> RoutingService
+RoutingController ..> RoutingRepository
+
+' ---------- Python routing ----------
+package python_routing {
+
+class VehicleProfile <<dataclass>> {
+  + key : str
+  + name : str
+  + max_wading_depth_cm : float
+}
+
+class Edge <<dataclass>> {
+  + edge_id : int
+  + from_node : int
+  + to_node : int
+  + length_m : float
+  + flood_depth_cm : float
+}
+
+class NodePos <<dataclass>> {
+  + lng : float
+  + lat : float
+}
+
+class GraphSnapshot <<dataclass>> {
+  + adj_forward : dict
+  + adj_backward : dict
+  + node_pos : dict
+  + has_any_flood : bool
+}
+
+class GraphCache {
+  - _snapshot : GraphSnapshot
+  --
+  + refresh() : GraphSnapshot
+  + get_nearest_nodes(lng, lat, max_dist_m, limit)
+}
+
+class RoutingResult <<dataclass>> {
+  + node_path : list
+  + came_by_edge : dict
+  + total_cost : float
+}
+
+class FloodPredictor {
+  - model
+  - model_version
+  --
+  + is_available() : bool
+  + predict_edge_depths(...)
+  + get_prediction_info()
+}
+
+class AstarModule <<module>> {
+  + find_path(snap, start_id, end_id, vehicle, is_dry)
+  + bidirectional_astar(...)
+}
+
+class FloodPenaltyModule <<module>> {
+  + parse_vehicle_type(type)
+  + flood_penalty(depth_cm, max_wading)
+  + compute_edge_cost(...)
+}
+
+GraphSnapshot *-- Edge
+GraphSnapshot *-- NodePos
+GraphCache o-- GraphSnapshot
+GraphCache ..> PostgreSQL
+GraphCache ..> FloodPredictor
+AstarModule ..> RoutingResult
+AstarModule ..> GraphSnapshot
+AstarModule ..> VehicleProfile
+AstarModule ..> FloodPenaltyModule
+PythonRoutingAPI ..> GraphCache
+PythonRoutingAPI ..> AstarModule
+
+}
+
+@enduml

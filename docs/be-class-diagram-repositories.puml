@@ -1,0 +1,174 @@
+@startuml HCM_Flood_Repositories
+title HCM Flood - Repository Layer
+
+hide circle
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+skinparam ArrowColor #1B2838
+skinparam ArrowThickness 1
+skinparam RankSep 80
+skinparam Nodesep 45
+skinparam Padding 14
+skinparam ClassBorderColor #1565C0
+skinparam ClassBackgroundColor #EBF5FB
+skinparam ClassHeaderBackgroundColor #90CAF9
+skinparam ClassFontSize 11
+top to bottom direction
+
+class PostgreSQL <<database>> {
+  engine : PostgreSQL + PostGIS
+}
+
+class PgPool <<external>> {
+}
+
+interface IDataAccess <<interface>> {
+  +query()
+  +queryOne()
+  +queryAll()
+}
+
+class BaseRepository {
+  -pool : PgPool
+  +query()
+  +queryOne()
+  +queryAll()
+}
+
+PostgreSQL -[hidden]down- PgPool
+PgPool -[hidden]down- IDataAccess
+IDataAccess -[hidden]down- BaseRepository
+
+PgPool --> PostgreSQL
+BaseRepository *-- PgPool
+BaseRepository ..|> IDataAccess
+
+' ==================== COT 1: User ====================
+class UserRepository <<extends BaseRepository>> {
+  +createUser()
+  +findByEmail()
+  +findById()
+}
+
+class UserSessionRepository <<extends BaseRepository>> {
+  +createSession()
+  +revokeSession()
+}
+
+class OtpRepository <<extends BaseRepository>> {
+  +createOtp()
+  +markConsumed()
+}
+
+class TelegramLinkRepository <<extends BaseRepository>> {
+  +createLinkToken()
+}
+
+class EmergencyAlertSendLogRepository <<extends BaseRepository>> {
+  +wasSentRecently()
+}
+
+class AccessLogRepository <<extends BaseRepository>> {
+  +log()
+}
+
+UserRepository -[hidden]right- UserSessionRepository
+UserSessionRepository -[hidden]down- OtpRepository
+OtpRepository -[hidden]down- TelegramLinkRepository
+TelegramLinkRepository -[hidden]down- EmergencyAlertSendLogRepository
+EmergencyAlertSendLogRepository -[hidden]down- AccessLogRepository
+
+UserSessionRepository ..> UserRepository : user_id
+OtpRepository ..> UserRepository : user_id
+TelegramLinkRepository ..> UserRepository : user_id
+EmergencyAlertSendLogRepository ..> UserRepository : user_id
+
+' ==================== COT 2: Flood / Sensor ====================
+class SensorRepository <<extends BaseRepository>> {
+  +getAllSensors()
+  +getSensorById()
+  +checkSensorHealth()
+}
+
+class FloodRepository <<extends BaseRepository>> {
+  +getRealTimeFloodData()
+  +createFloodLog()
+  +getHeatmapData()
+}
+
+class CrowdReportRepository <<extends BaseRepository>> {
+  +createReport()
+  +moderateReport()
+}
+
+class AlertRepository <<extends BaseRepository>> {
+  +createAlert()
+  +getActiveAlerts()
+}
+
+class EnergyRepository <<extends BaseRepository>> {
+  +createEnergyLog()
+}
+
+SensorRepository -[hidden]right- FloodRepository
+FloodRepository -[hidden]down- CrowdReportRepository
+CrowdReportRepository -[hidden]down- AlertRepository
+AlertRepository -[hidden]down- EnergyRepository
+
+FloodRepository ..> SensorRepository : flood_sensor_id
+AlertRepository ..> SensorRepository : sensor_id
+EnergyRepository ..> SensorRepository : sensor_id
+
+' ==================== COT 3: Routing / Ops ====================
+class RoutingRepository <<extends BaseRepository>> {
+  +getNearestNode()
+  +getActiveEdgesWithFloodDepth()
+}
+
+class FusionRepository <<extends BaseRepository>> {
+  +getSensorLatestInWindow()
+}
+
+class ResearchRepository <<extends BaseRepository>> {
+  +getColdStartHotspots()
+}
+
+class OtaUpdateRepository <<extends BaseRepository>> {
+  +createOtaUpdate()
+}
+
+class DataRetentionRepository <<extends BaseRepository>> {
+  +deleteOldFloodLogs()
+}
+
+class ReportEvaluationRepository <<extends BaseRepository>> {
+  +createEvaluation()
+}
+
+class EmergencySubscriptionRepository <<extends BaseRepository>> {
+  +createSubscription()
+}
+
+class AuditLogRepository <<extends BaseRepository>> {
+  +getLogs()
+}
+
+RoutingRepository -[hidden]right- FusionRepository
+FusionRepository -[hidden]down- ResearchRepository
+ResearchRepository -[hidden]down- OtaUpdateRepository
+OtaUpdateRepository -[hidden]down- DataRetentionRepository
+DataRetentionRepository -[hidden]down- ReportEvaluationRepository
+ReportEvaluationRepository -[hidden]down- EmergencySubscriptionRepository
+EmergencySubscriptionRepository -[hidden]down- AuditLogRepository
+
+' ==================== Bo cuc 3 cot ====================
+UserRepository -[hidden]right- SensorRepository
+SensorRepository -[hidden]right- RoutingRepository
+BaseRepository -[hidden]down- SensorRepository
+
+BaseRepository <|-- UserRepository
+BaseRepository <|-- SensorRepository
+BaseRepository <|-- RoutingRepository
+
+@enduml

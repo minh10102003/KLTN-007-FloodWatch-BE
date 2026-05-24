@@ -4,7 +4,7 @@
 
 INSERT INTO sensors (sensor_id, location_name, coords, hardware_type, model, installation_date, installation_height)
 VALUES
-  ('S01', 'Trạm Xô Viết Nghệ Tĩnh', ST_SetSRID(ST_MakePoint(106.718, 10.812), 4326)::geography, 'Wokwi_ESP32', 'HC-SR04', '2024-01-01', 75.0),
+  ('S01', 'Nguyễn Thái Sơn, Phường 4, Hạnh Thông, TP.HCM', ST_SetSRID(ST_MakePoint(106.68066, 10.81655), 4326)::geography, 'Wokwi_ESP32', 'HC-SR04', '2024-01-01', 150.0),
   ('S03', 'Trạm Bình Quới', ST_SetSRID(ST_MakePoint(106.735, 10.828), 4326)::geography, 'Real_LoRa_Node', 'HC-SR04', '2024-01-01', 75.0),
   ('NODE_007', 'Trạm Vườn Lài', ST_SetSRID(ST_MakePoint(106.692, 10.848), 4326)::geography, 'Wokwi_ESP32', 'HC-SR04', '2024-01-01', 75.0)
 ON CONFLICT (sensor_id) DO UPDATE SET
