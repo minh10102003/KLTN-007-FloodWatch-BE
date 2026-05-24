@@ -45,10 +45,44 @@ class CrowdReportAutoApproveRepository extends BaseRepository {
         );
     }
 
+    /** Cập nhật cache count cho mọi báo cáo cùng cụm (cùng flood_level, trong bán kính). */
+    async updateNearbyCountsInCluster(lat, lng, floodLevel, count, radiusMeters = 100) {
+        await this.query(
+            `
+            UPDATE crowd_reports
+            SET nearby_report_count = $1
+            WHERE flood_level = $2
+              AND ST_DWithin(
+                    location,
+                    ST_SetSRID(ST_MakePoint($3, $4), 4326)::geography,
+                    $5
+                  )
+            `,
+            [count, floodLevel, lng, lat, radiusMeters]
+        );
+    }
+
     async updateSensorVerified(reportId, verified) {
         await this.query(
             `UPDATE crowd_reports SET sensor_verified = $1 WHERE id = $2`,
             [verified, reportId]
+        );
+    }
+
+    /** Gán sensor_verified cho cả cụm cùng flood_level trong bán kính. */
+    async updateSensorVerifiedInCluster(lat, lng, floodLevel, verified, radiusMeters = 100) {
+        await this.query(
+            `
+            UPDATE crowd_reports
+            SET sensor_verified = $1
+            WHERE flood_level = $2
+              AND ST_DWithin(
+                    location,
+                    ST_SetSRID(ST_MakePoint($3, $4), 4326)::geography,
+                    $5
+                  )
+            `,
+            [verified, floodLevel, lng, lat, radiusMeters]
         );
     }
 
@@ -63,6 +97,31 @@ class CrowdReportAutoApproveRepository extends BaseRepository {
               AND moderation_status = 'pending'
             `,
             [reportId]
+        );
+    }
+
+    /**
+     * Tự động duyệt mọi báo cáo pending trong cụm (cùng flood_level, bán kính).
+     * @returns {Promise<Array<{id: number}>>} Danh sách id đã duyệt
+     */
+    async applyAutoApproveCluster(lat, lng, floodLevel, radiusMeters = 100) {
+        return await this.queryAll(
+            `
+            UPDATE crowd_reports
+            SET moderation_status = 'approved',
+                auto_approved = TRUE,
+                moderated_at = CURRENT_TIMESTAMP
+            WHERE flood_level = $1
+              AND moderation_status = 'pending'
+              AND COALESCE(auto_approved, FALSE) = FALSE
+              AND ST_DWithin(
+                    location,
+                    ST_SetSRID(ST_MakePoint($2, $3), 4326)::geography,
+                    $4
+                  )
+            RETURNING id
+            `,
+            [floodLevel, lng, lat, radiusMeters]
         );
     }
 
