@@ -21,6 +21,7 @@ const CROWD_REPORT_SELECT = `
     cr.moderated_at,
     cr.rejection_reason,
     cr.auto_approved,
+    cr.skip_auto_approve,
     cr.sensor_verified,
     cr.nearby_report_count,
     ST_X(cr.location::geometry) AS lng,

@@ -20,6 +20,13 @@ function getModerationDisplay(report) {
         return { key: 'approved', label: 'Đã duyệt' };
     }
   if (status === 'pending') {
+        if (report.skip_auto_approve) {
+            return {
+                key: 'pending_skip_auto',
+                label: 'Chờ duyệt',
+                hint: 'Đã bỏ qua auto-approve'
+            };
+        }
         const nearby = Number(report.nearby_report_count) || 0;
         if (nearby > 0 && nearby < 5) {
             return {

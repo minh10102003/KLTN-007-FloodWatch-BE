@@ -85,6 +85,37 @@ router.get('/pending', authenticate, requireAdminOrModerator, reportModerationCo
 
 /**
  * @swagger
+ * /api/reports/{reportId}/skip-auto-approve:
+ *   post:
+ *     summary: Bỏ qua auto-approve (chỉ duyệt thủ công) — Moderator/Admin
+ *     tags: [Report Moderation]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: reportId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Đã đánh dấu bỏ qua auto-approve
+ *       400:
+ *         description: Báo cáo không ở trạng thái pending
+ *       404:
+ *         description: Không tìm thấy báo cáo
+ *       409:
+ *         description: Báo cáo đã auto-approve
+ */
+router.post(
+    '/:reportId/skip-auto-approve',
+    authenticate,
+    requireModerator,
+    reportModerationController.skipAutoApprove
+);
+
+/**
+ * @swagger
  * /api/reports/{reportId}/moderate:
  *   put:
  *     summary: Kiểm duyệt báo cáo (approve/reject) - Moderator/Admin only

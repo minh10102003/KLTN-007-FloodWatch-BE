@@ -13,6 +13,7 @@
     "migrate:role-constraint": "node scripts/runMigrationRoleConstraint.js",
     "migrate:audit-logs": "node scripts/runMigrationAuditLogs.js",
     "migrate:auto-approve": "node scripts/runMigrationAutoApprove.js",
+    "migrate:skip-auto-approve": "node scripts/runMigrationSkipAutoApprove.js",
     "migrate:flood-levels": "node scripts/runMigrationFloodLevels5.js",
     "reconcile:auto-approve": "node scripts/reconcileAutoApprovePending.js",
     "migrate:photo-url": "node scripts/runMigrationPhotoUrl.js",

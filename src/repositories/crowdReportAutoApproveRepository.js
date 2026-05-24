@@ -114,6 +114,7 @@ class CrowdReportAutoApproveRepository extends BaseRepository {
             WHERE flood_level = $1
               AND moderation_status = 'pending'
               AND COALESCE(auto_approved, FALSE) = FALSE
+              AND COALESCE(skip_auto_approve, FALSE) = FALSE
               AND ST_DWithin(
                     location,
                     ST_SetSRID(ST_MakePoint($2, $3), 4326)::geography,
@@ -140,12 +141,31 @@ class CrowdReportAutoApproveRepository extends BaseRepository {
                 COUNT(*) FILTER (
                     WHERE moderation_status = 'pending'
                       AND COALESCE(auto_approved, FALSE) = FALSE
+                      AND COALESCE(skip_auto_approve, FALSE) = FALSE
                       AND nearby_report_count > 0
                       AND nearby_report_count < $1
                 )::int AS pending_auto_approve
             FROM crowd_reports
         `;
         return await this.queryOne(query, [AUTO_APPROVE_THRESHOLD]);
+    }
+
+    /**
+     * Moderator bỏ qua auto-approve — báo cáo chỉ duyệt thủ công.
+     * @returns {Promise<object|null>}
+     */
+    async setSkipAutoApprove(reportId) {
+        return await this.queryOne(
+            `
+            UPDATE crowd_reports
+            SET skip_auto_approve = TRUE
+            WHERE id = $1
+              AND moderation_status = 'pending'
+              AND COALESCE(auto_approved, FALSE) = FALSE
+            RETURNING id, skip_auto_approve, moderation_status
+            `,
+            [reportId]
+        );
     }
 }
 

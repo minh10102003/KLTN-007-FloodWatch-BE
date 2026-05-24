@@ -13,6 +13,7 @@
  */
 const BaseRepository = require('../src/repositories/baseRepository');
 const crowdReportRepository = require('../src/repositories/crowdReportRepository');
+const crowdReportAutoApproveRepository = require('../src/repositories/crowdReportAutoApproveRepository');
 const reportModerationController = require('../src/controllers/reportModerationController');
 const userModel = require('../src/models/userModel');
 
@@ -233,5 +234,35 @@ describe('Admin Moderation 2.2 — Controller validate action + 404', () => {
         expect(res.status).toHaveBeenCalledWith(409);
         expect(res.json.mock.calls[0][0].error).toMatch(/tự động duyệt/i);
         expect(moderateSpy).not.toHaveBeenCalled();
+    });
+
+    test('POST skip-auto-approve → đánh dấu skip_auto_approve', async () => {
+        const row = makeReportRow({
+            moderation_status: 'pending',
+            auto_approved: false,
+            skip_auto_approve: false,
+            nearby_report_count: 1
+        });
+        jest.spyOn(crowdReportRepository, 'getReportById')
+            .mockResolvedValueOnce(row)
+            .mockResolvedValueOnce({ ...row, skip_auto_approve: true });
+        const setSkipSpy = jest
+            .spyOn(crowdReportAutoApproveRepository, 'setSkipAutoApprove')
+            .mockResolvedValueOnce({ id: 42, skip_auto_approve: true, moderation_status: 'pending' });
+
+        const req = {
+            params: { reportId: '42' },
+            user: { id: 99, username: 'mod01' },
+            protocol: 'https',
+            get: () => 'api.floodsight.id.vn'
+        };
+        const res = mockRes();
+
+        await reportModerationController.skipAutoApprove(req, res);
+
+        expect(setSkipSpy).toHaveBeenCalledWith(42);
+        expect(res.json).toHaveBeenCalledTimes(1);
+        expect(res.json.mock.calls[0][0].success).toBe(true);
+        expect(res.json.mock.calls[0][0].message).toMatch(/bỏ qua auto-approve/i);
     });
 });
