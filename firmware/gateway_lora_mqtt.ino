@@ -2,7 +2,7 @@
  * HCM Flood — Gateway LoRa → MQTT (trạm S01)
  * Nhận LoRa: S01,<distance_cm>
  * Gửi MQTT:  {"sensor_id":"S01","value":<distance_cm>}
- * BE tính water_level (installation_height − value) → FE
+ * BE hiển thị trực tiếp value (cm) lên FE
  *
  * Khớp lora_sensor_s01.ino: 433.175 MHz, SF7, BW 125kHz, SyncWord 0x34
  * Chân LoRa/OLED giống node: SS=5, RST=26, DIO0=4, SCK=18, MISO=19, MOSI=23, I2C 21/22

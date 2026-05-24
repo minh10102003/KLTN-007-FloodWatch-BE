@@ -19,11 +19,11 @@ Gateway S01: chỉ forward `sensor_id` + `value` (khoảng cách cm tới vật 
 ## Backend
 
 - Topic: `hcm/flood/data`
-- **S01 (Wokwi / LoRa)**: payload chỉ `value` = khoảng cách cm; BE tính `water_level = installation_height − value` (S01 DB = 150 cm).
+- **S01 (Wokwi / LoRa)**: payload `value` (cm) = mực nước hiển thị FE (không trừ `installation_height`).
 
 ## Lưu ý
 
 - Sửa WiFi / MQTT trong **gateway_lora_mqtt.ino** trước khi nạp; không commit mật khẩu production vào repo public.
 - **`MQTT_SENSOR_ID`** trong gateway phải trùng trạm trên bản đồ: `S03` = Bình Quới, `NODE_007` = Vườn Lài. Gửi `S03` nhưng xem `NODE_007` trên FE → hiển thị **Mất kết nối**.
-- Payload MQTT **không cần** `water_level` — BE tự tính từ `value` + `installation_height`.
+- Payload MQTT chỉ cần `value` — BE lưu/hiển thị đúng số cm đó.
 - Dashboard **offline** sau ~5 phút không có `last_data_time` (cron health check). Backend Render phải chạy và subscribe HiveMQ.

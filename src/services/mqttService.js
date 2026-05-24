@@ -7,7 +7,6 @@ const emergencySubscriptionRepository = require('../repositories/emergencySubscr
 const emergencyAlertSendLogRepository = require('../repositories/emergencyAlertSendLogRepository');
 const emergencyNotificationService = require('./emergencyNotificationService');
 const { determineStatusFromLevel } = require('./floodStatusService');
-const { computeWaterLevelFromDistance } = require('../utils/ultrasonicWaterLevel');
 const { emitAdminNotification } = require('../socket/adminSocket');
 
 /** Khoảng cách thô từ node (cm) — chỉ lưu DB, không dùng tính mực nước. */
@@ -20,28 +19,15 @@ const parseRawDistance = (value) => {
 };
 
 /**
- * Tính mực nước từ khoảng cách siêu âm (value = cm tới vật cản).
- * Firmware chỉ gửi distance; BE dùng installation_height trong DB.
+ * value từ MQTT (cm) = mực nước hiển thị trên FE (không trừ installation_height).
  */
-async function resolveWaterLevel(sensorId, data) {
+async function resolveWaterLevel(_sensorId, data) {
     const rawDistance = parseRawDistance(data.value);
     if (rawDistance == null) {
         return { waterLevel: null, rawDistance: null };
     }
 
-    const installationHeight = await sensorRepository.getInstallationHeight(sensorId);
-    if (!installationHeight) {
-        return { waterLevel: null, rawDistance };
-    }
-
-    const level = computeWaterLevelFromDistance(rawDistance, {
-        installationHeightCm: installationHeight
-    });
-    if (level.zone === 'invalid') {
-        return { waterLevel: null, rawDistance };
-    }
-
-    return { waterLevel: level.water_level_cm, rawDistance };
+    return { waterLevel: rawDistance, rawDistance };
 }
 
 /** Khóa idempotent: ưu tiên msg_id / seq từ thiết bị; không có thì hash (sensor + giây + raw cm). */
@@ -195,7 +181,7 @@ const init = () => {
                 return;
             }
 
-            // 3. Sensor phải tồn tại và active (trước khi resolve mực nước — cần installation_height fallback)
+            // 3. Sensor phải tồn tại và active
             const sensor = await sensorRepository.getSensorById(sensor_id);
             if (!sensor) {
                 console.log(`⚠️ [Sensor] Sensor ${sensor_id} not found or inactive`);

@@ -3,7 +3,7 @@
  * Chỉ đo và gửi khoảng cách tới vật cản (cm).
  * Payload LoRa: S01,<distance_cm>
  * Gateway → MQTT {"sensor_id":"S01","value":<distance>}
- * BE tính water_level từ installation_height (DB) − value → hiển thị FE
+ * BE hiển thị trực tiếp value (cm) lên FE
  */
 #include <SPI.h>
 #include <LoRa.h>

@@ -1,10 +1,7 @@
 /*
  * HCM Flood - Mạch cảm biến giả lập Wokwi — chỉ trạm S01
  * Gửi MQTT: sensor_id, value (raw_distance cm), temperature, humidity (DHT22).
- * Backend tính water_level = installation_height (DB) − value.
- *
- * Độ cao lắp 150 cm — khớp sensors.installation_height cho S01 trên Neon.
- * Chạy migration: npm run migrate:s01-height-150
+ * BE hiển thị trực tiếp value (cm) làm mực nước trên FE.
  */
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
@@ -25,8 +22,6 @@ const int ECHO_PIN = 18;
 #define DHT_TYPE DHT22
 DHT dht(DHT_PIN, DHT_TYPE);
 
-// Khớp sensors.installation_height (S01) = 150 cm
-const int INSTALL_HEIGHT = 150;
 const char* SENSOR_ID = "S01";
 const char* LCD_NAME = "S01-Ng.Thai Son";
 
@@ -95,20 +90,15 @@ void loop() {
     lcd.clear();
   }
 
-  int water_level = INSTALL_HEIGHT - fake_distance;
-  if (water_level < 0) {
-    water_level = 0;
-  }
-
   float temperature = dht.readTemperature();
   float humidity = dht.readHumidity();
 
   lcd.setCursor(0, 0);
   lcd.print(LCD_NAME);
   lcd.setCursor(0, 1);
-  lcd.print("MUC:");
-  lcd.print(water_level);
-  lcd.print("cm");
+  lcd.print("cm:");
+  lcd.print(fake_distance);
+  lcd.print(" ");
   if (!isnan(temperature) && temperature >= -40 && temperature <= 80) {
     lcd.print(" T:");
     lcd.print((int)temperature);
@@ -116,7 +106,6 @@ void loop() {
   }
   lcd.print("   ");
 
-  // Payload: value = raw_distance; BE tính water_level từ installation_height DB
   String payload = "{\"sensor_id\":\"" + String(SENSOR_ID) + "\",\"value\":" + String(fake_distance);
   if (!isnan(temperature) && temperature >= -40 && temperature <= 80) {
     payload += ",\"temperature\":" + String(temperature, 1);
@@ -128,10 +117,8 @@ void loop() {
 
   Serial.print("[");
   Serial.print(SENSOR_ID);
-  Serial.print("] raw_distance: ");
+  Serial.print("] value: ");
   Serial.print(fake_distance);
-  Serial.print("cm, water_level: ");
-  Serial.print(water_level);
   Serial.print("cm");
   if (!isnan(temperature)) {
     Serial.print(", temp: ");
