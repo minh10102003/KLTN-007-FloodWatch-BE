@@ -84,7 +84,9 @@ async function sendChatMessage(message, history, sensorSnapshot, options = {}) {
         throw err;
     }
 
-    const chatContext = buildChatContext(sensorSnapshot);
+    const chatContext = buildChatContext(sensorSnapshot, options.crowdReportSnapshot || [], {
+        crowd_hours: options.crowdReportHours
+    });
     let systemInstruction = buildSystemPrompt(JSON.stringify(chatContext, null, 2));
     const agentBlock = options.agentContextBlock || '';
     if (agentBlock) {
@@ -106,6 +108,7 @@ async function sendChatMessage(message, history, sensorSnapshot, options = {}) {
         reply: reply || '',
         model: modelName,
         sensor_count: sensorSnapshot.length,
+        crowd_report_count: (options.crowdReportSnapshot || []).length,
         report_draft: options.reportDraft || null
     };
 }

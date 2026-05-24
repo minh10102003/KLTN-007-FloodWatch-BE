@@ -1,5 +1,10 @@
 const floodRepository = require('./floodRepository');
+const crowdReportRepository = require('./crowdReportRepository');
 const { mucDoNguyHiemFromCm } = require('../utils/floodDangerLevel');
+const { floodLevelToCm, getFloodLevelLabel } = require('../utils/floodLevelMapper');
+
+const DEFAULT_CROWD_HOURS = 24;
+const DEFAULT_CROWD_LIMIT = 30;
 
 /**
  * Chuẩn hóa bản ghi sensor cho Gemini / API flood-status.
@@ -67,7 +72,68 @@ async function getChatSensorSnapshot(area = null, limit = 50) {
     return mapped.slice(0, max);
 }
 
+/**
+ * Chuẩn hóa báo cáo người dân đã duyệt cho Gemini (đường/khu ngập).
+ */
+function mapRowToChatCrowdReport(row) {
+    const content = row.content != null ? String(row.content).trim().slice(0, 240) : null;
+    const lat = row.lat != null ? parseFloat(row.lat) : null;
+    const lng = row.lng != null ? parseFloat(row.lng) : null;
+
+    return {
+        id: row.id,
+        muc_ngap: row.flood_level,
+        muc_ngap_label: getFloodLevelLabel(row.flood_level),
+        muc_nuoc_uoc_tinh_cm: floodLevelToCm(row.flood_level),
+        mo_ta: content || null,
+        xac_minh_cheo: row.validation_status === 'cross_verified',
+        xac_minh_cam_bien: row.verified_by_sensor === true,
+        tu_dong_duyet: row.auto_approved === true,
+        diem_tin_cay: row.reliability_score != null ? Number(row.reliability_score) : null,
+        toa_do: { lat, lng },
+        thoi_gian: row.created_at || null
+    };
+}
+
+/**
+ * Báo cáo người dân đã duyệt (24h gần nhất) — dùng gợi ý đoạn đường ngập.
+ * @param {number} hours
+ * @param {string|null} area - Lọc theo nội dung mô tả (contains)
+ * @param {number} limit
+ */
+async function getChatCrowdReportSnapshot(
+    hours = DEFAULT_CROWD_HOURS,
+    area = null,
+    limit = DEFAULT_CROWD_LIMIT
+) {
+    const windowHours = Math.min(168, Math.max(1, parseInt(hours, 10) || DEFAULT_CROWD_HOURS));
+    const rows = await crowdReportRepository.getRecentReports(windowHours, 'approved');
+    let mapped = rows.map(mapRowToChatCrowdReport);
+
+    const areaTrim = area != null ? String(area).trim() : '';
+    if (areaTrim) {
+        const needle = areaTrim.toLowerCase();
+        mapped = mapped.filter(
+            (r) =>
+                String(r.mo_ta || '').toLowerCase().includes(needle) ||
+                String(r.muc_ngap_label || '').toLowerCase().includes(needle)
+        );
+    }
+
+    mapped.sort((a, b) => {
+        const cmDiff = (b.muc_nuoc_uoc_tinh_cm || 0) - (a.muc_nuoc_uoc_tinh_cm || 0);
+        if (cmDiff !== 0) return cmDiff;
+        if (a.xac_minh_cheo !== b.xac_minh_cheo) return a.xac_minh_cheo ? -1 : 1;
+        return new Date(b.thoi_gian || 0) - new Date(a.thoi_gian || 0);
+    });
+
+    const max = Math.min(50, Math.max(1, parseInt(limit, 10) || DEFAULT_CROWD_LIMIT));
+    return mapped.slice(0, max);
+}
+
 module.exports = {
     getChatSensorSnapshot,
-    mapRowToChatSensor
+    getChatCrowdReportSnapshot,
+    mapRowToChatSensor,
+    mapRowToChatCrowdReport
 };

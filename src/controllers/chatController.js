@@ -46,12 +46,14 @@ const chatController = {
             const agentContextBlock = chatAgentService.buildAgentContextBlock(reportDraft);
 
             const sensorSnapshot = await chatRepository.getChatSensorSnapshot(area || null);
-            const { reply, model, sensor_count, report_draft } = await geminiChatService.sendChatMessage(
-                msg,
-                history,
-                sensorSnapshot,
-                { agentContextBlock, reportDraft }
-            );
+            const crowdReportSnapshot = await chatRepository.getChatCrowdReportSnapshot(24, area || null);
+            const { reply, model, sensor_count, crowd_report_count, report_draft } =
+                await geminiChatService.sendChatMessage(msg, history, sensorSnapshot, {
+                    agentContextBlock,
+                    reportDraft,
+                    crowdReportSnapshot,
+                    crowdReportHours: 24
+                });
 
             res.json({
                 success: true,
@@ -60,6 +62,7 @@ const chatController = {
                 meta: {
                     model,
                     sensor_count,
+                    crowd_report_count,
                     account_id: accountId ? String(accountId).slice(0, 64) : undefined,
                     intent: intentAnalysis.intent,
                     report_draft: report_draft || reportDraft || undefined
