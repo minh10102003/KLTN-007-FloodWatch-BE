@@ -7,7 +7,7 @@ Trả về ĐÚNG một JSON (không markdown), các trường:
 {
   "intent": "general" | "create_report",
   "location_text": string | null,
-  "flood_level": "Nhẹ" | "Trung bình" | "Nặng" | null,
+  "flood_level": "Mức 1" | "Mức 2" | "Mức 3" | "Mức 4" | "Mức 5" | null,
   "content": string | null,
   "missing_fields": string[]
 }
@@ -18,7 +18,7 @@ Quy tắc intent:
 
 Khi intent = "create_report":
 - location_text: địa điểm/đường/quận user nêu (nguyên văn, tiếng Việt).
-- flood_level: CHỈ một trong "Nhẹ", "Trung bình", "Nặng" — map từ lời user ("ngập nặng"→"Nặng", "nhẹ"→"Nhẹ").
+- flood_level: CHỈ một trong "Mức 1"…"Mức 5" (10/20/30/40/>50 cm) — map từ lời user ("ngập sâu"→"Mức 5", "nhẹ"→"Mức 1", "20cm"→"Mức 2").
 - content: mô tả ngắn tối đa 300 ký tự (từ user), null nếu không có.
 - missing_fields: mảng tên trường còn thiếu để tạo báo cáo: "location_text", "flood_level" (chỉ liệt kê thật sự thiếu).
 

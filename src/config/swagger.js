@@ -186,7 +186,10 @@ const options = {
                         id: { type: 'integer', example: 1 },
                         reporter_name: { type: 'string', example: 'Nguyễn Văn A' },
                         reporter_id: { type: 'string', example: 'user123' },
-                        flood_level: { type: 'string', enum: ['Nhẹ', 'Trung bình', 'Nặng'] },
+                        flood_level: {
+                            type: 'string',
+                            enum: ['Mức 1', 'Mức 2', 'Mức 3', 'Mức 4', 'Mức 5']
+                        },
                         reliability_score: { type: 'number', example: 75 },
                         validation_status: { type: 'string', enum: ['pending', 'verified', 'rejected', 'cross_verified'] },
                         verified_by_sensor: { type: 'boolean', example: true },

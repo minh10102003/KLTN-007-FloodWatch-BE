@@ -1,4 +1,5 @@
 const BaseRepository = require('./baseRepository');
+const { sqlFloodLevelToCm } = require('../utils/floodLevelMapper');
 
 /**
  * Flood Repository
@@ -296,12 +297,7 @@ class FloodRepository extends BaseRepository {
                 SELECT 
                     ST_X(location::geometry) as lng,
                     ST_Y(location::geometry) as lat,
-                    CASE flood_level
-                        WHEN 'Nhẹ' THEN 10
-                        WHEN 'Trung bình' THEN 30
-                        WHEN 'Nặng' THEN 50
-                        ELSE 0
-                    END as water_level,
+                    ${sqlFloodLevelToCm('flood_level')} as water_level,
                     'normal' as status,
                     'crowd' as source
                 FROM crowd_reports
@@ -368,14 +364,7 @@ class FloodRepository extends BaseRepository {
             crowd_agg AS (
                 SELECT
                     date_trunc('hour', cr.created_at) AS bucket,
-                    AVG(
-                        CASE cr.flood_level
-                            WHEN 'Nhẹ' THEN 10
-                            WHEN 'Trung bình' THEN 30
-                            WHEN 'Nặng' THEN 50
-                            ELSE 0
-                        END
-                    ) AS crowd_avg_water_level,
+                    AVG(${sqlFloodLevelToCm('cr.flood_level')}) AS crowd_avg_water_level,
                     COUNT(*)::int AS crowd_points
                 FROM crowd_reports cr
                 WHERE cr.created_at >= NOW() - INTERVAL '24 hour'

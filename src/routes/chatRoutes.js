@@ -60,7 +60,7 @@ router.post('/chat', chatLimiter, chatController.postChat);
  *             type: object
  *             required: [level, lat, lng]
  *             properties:
- *               level: { type: string, enum: [Nhẹ, Trung bình, Nặng] }
+ *               level: { type: string, enum: [Mức 1, Mức 2, Mức 3, Mức 4, Mức 5] }
  *               lat: { type: number }
  *               lng: { type: number }
  *               location_description: { type: string }

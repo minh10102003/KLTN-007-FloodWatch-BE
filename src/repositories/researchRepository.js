@@ -1,4 +1,5 @@
 const BaseRepository = require('./baseRepository');
+const { sqlFloodLevelToCm } = require('../utils/floodLevelMapper');
 
 class ResearchRepository extends BaseRepository {
     _boundsClause(columnSql, paramStartIndex) {
@@ -38,12 +39,7 @@ class ResearchRepository extends BaseRepository {
                     cr.location,
                     ST_X(cr.location::geometry) AS lng,
                     ST_Y(cr.location::geometry) AS lat,
-                    CASE cr.flood_level
-                        WHEN 'Nhẹ' THEN 10.0
-                        WHEN 'Trung bình' THEN 30.0
-                        WHEN 'Nặng' THEN 50.0
-                        ELSE 0.0
-                    END AS crowd_cm
+                    ${sqlFloodLevelToCm('cr.flood_level')} AS crowd_cm
                 FROM crowd_reports cr
                 WHERE cr.moderation_status = 'approved'
                   AND cr.created_at >= NOW() - make_interval(hours => $${reportHoursParam}::int)

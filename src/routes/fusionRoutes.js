@@ -11,7 +11,7 @@ const fusionController = require('../controllers/fusionController');
  *     description: |
  *       Trả về hai nhóm điểm:
  *       - **sensors**: mỗi cảm biến có `water_level_sensor_only_cm` và `water_level_fused_cm` (tại vị trí cảm biến hai giá trị trùng nhau).
- *       - **crowd**: mỗi báo cáo đã duyệt có `crowd_only_cm` (từ mức Nhẹ/Trung bình/Nặng) và `fused_cm` (trộn với cảm biến gần nhất nếu trong bán kính hiệu lực).
+ *       - **crowd**: mỗi báo cáo đã duyệt có `crowd_only_cm` (từ mức Mức 1–5) và `fused_cm` (trộn với cảm biến gần nhất nếu trong bán kính hiệu lực).
  *       Trọng số cảm biến giảm theo khoảng cách; trọng số crowd giảm khi lệch nhiều so với cảm biến gần nhất.
  *       Tham số mô hình tùy chỉnh qua `FUSION_R_MAX_M`, `FUSION_DECAY_DIST_M`, `FUSION_DISAGREE_SCALE_CM` trong `.env`.
  *     parameters:

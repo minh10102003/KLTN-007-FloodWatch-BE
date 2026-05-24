@@ -1,6 +1,6 @@
 const crowdReportModel = require('../models/crowdReportModel');
 const userModel = require('../models/userModel');
-const { mapFloodLevel, VALID_LEVELS } = require('../utils/floodLevelMapper');
+const { mapFloodLevel, VALID_LEVELS, getFloodLevelLabel } = require('../utils/floodLevelMapper');
 const { emitAdminNotification } = require('../socket/adminSocket');
 const { getModerationDisplay, getValidationDisplay } = require('../utils/reportDisplayStatus');
 
@@ -26,7 +26,9 @@ async function submitCrowdReport({ user, body }) {
 
     const levelNorm = mapFloodLevel(level);
     if (!levelNorm || !VALID_LEVELS.includes(levelNorm)) {
-        const err = new Error('Mức độ ngập không hợp lệ. Chọn: Nhẹ, Trung bình, hoặc Nặng');
+        const err = new Error(
+            `Mức độ ngập không hợp lệ. Chọn: ${VALID_LEVELS.map(getFloodLevelLabel).join(', ')}`
+        );
         err.code = 'VALIDATION';
         throw err;
     }

@@ -195,7 +195,7 @@ Trong câu trả lời: tóm tắt nháp, nhắc bấm **Xác nhận gửi báo 
 ## Yêu cầu tạo báo cáo (chưa đủ dữ liệu)
 Thiếu: ${missing || 'thông tin'}.
 ${geoHint}
-Hỏi user bổ sung (địa chỉ cụ thể TP.HCM, mức: Nhẹ / Trung bình / Nặng). Không bịa tọa độ. Không khuyên chuyển sang form khác nếu chỉ thiếu tọa độ — hướng user mô tả lại đường/quận rõ hơn.`;
+Hỏi user bổ sung (địa chỉ cụ thể TP.HCM, mức: Mức 1–5 tương ứng 10/20/30/40/>50 cm). Không bịa tọa độ. Không khuyên chuyển sang form khác nếu chỉ thiếu tọa độ — hướng user mô tả lại đường/quận rõ hơn.`;
 }
 
 module.exports = {

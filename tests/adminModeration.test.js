@@ -28,7 +28,7 @@ function makeReportRow(overrides = {}) {
         id: 42,
         reporter_name: 'Nguyen Van A',
         reporter_id: '7',
-        flood_level: 'Trung bình',
+        flood_level: 'Mức 3',
         reliability_score: 50,
         validation_status: 'pending',
         verified_by_sensor: false,

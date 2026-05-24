@@ -80,9 +80,11 @@ WITH crowd_recent AS (
         reliability_score,
         EXTRACT(EPOCH FROM (NOW() - created_at)) / 3600.0 AS age_hours,
         CASE
-            WHEN LOWER(TRIM(flood_level)) IN ('nhẹ', 'nhe', 'light', 'mild') THEN 12
-            WHEN LOWER(TRIM(flood_level)) IN ('trung bình', 'trung binh', 'medium', 'moderate') THEN 25
-            WHEN LOWER(TRIM(flood_level)) IN ('nặng', 'nang', 'heavy', 'severe') THEN 45
+            WHEN LOWER(TRIM(flood_level)) IN ('muc 1', 'mức 1', '1', 'nhẹ', 'nhe', 'light', 'mild') THEN 10
+            WHEN LOWER(TRIM(flood_level)) IN ('muc 2', 'mức 2', '2') THEN 20
+            WHEN LOWER(TRIM(flood_level)) IN ('muc 3', 'mức 3', '3', 'trung bình', 'trung binh', 'medium', 'moderate') THEN 30
+            WHEN LOWER(TRIM(flood_level)) IN ('muc 4', 'mức 4', '4') THEN 40
+            WHEN LOWER(TRIM(flood_level)) IN ('muc 5', 'mức 5', '5', 'nặng', 'nang', 'heavy', 'severe') THEN 55
             ELSE NULL
         END AS flood_cm
     FROM crowd_reports

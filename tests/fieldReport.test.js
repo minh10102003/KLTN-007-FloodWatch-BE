@@ -58,7 +58,7 @@ describe('Field Report 2.1 — lưu Geometry + link ảnh xuống DB', () => {
         const result = await crowdReportRepository.createReport(
             'Nguyen Van A',
             '7',
-            'Trung bình',
+            'Mức 3',
             lng,
             lat,
             photoUrl,
@@ -76,7 +76,7 @@ describe('Field Report 2.1 — lưu Geometry + link ảnh xuống DB', () => {
         expect(sql).toMatch(/ST_SetSRID\(\s*ST_MakePoint\(\s*\$4\s*,\s*\$5\s*\)\s*,\s*4326\s*\)\s*::\s*geography/i);
         expect(params[0]).toBe('Nguyen Van A');
         expect(params[1]).toBe('7');
-        expect(params[2]).toBe('Trung bình');
+        expect(params[2]).toBe('Mức 3');
         expect(params[3]).toBe(lng);
         expect(params[4]).toBe(lat);
         expect(params[5]).toBe(50);
@@ -90,7 +90,7 @@ describe('Field Report 2.1 — lưu Geometry + link ảnh xuống DB', () => {
         await crowdReportRepository.createReport(
             'Khach Le',
             null,
-            'Nhẹ',
+            'Mức 1',
             106.701,
             10.802,
             'https://cdn/uploads/only.jpg',
@@ -112,7 +112,7 @@ describe('Field Report 2.1 — lưu Geometry + link ảnh xuống DB', () => {
             crowdReportRepository.createReport(
                 'A',
                 null,
-                'Trung bình',
+                'Mức 3',
                 106.7,
                 10.8,
                 'https://x/p.jpg',
@@ -146,7 +146,7 @@ describe('Field Report 2.1 — validate đầu vào tại Controller', () => {
     });
 
     test('Thiếu (level/lng/lat) → 400', async () => {
-        const req = { body: { name: 'Khach', level: 'Trung bình' }, user: null };
+        const req = { body: { name: 'Khach', level: 'Mức 3' }, user: null };
         const res = mockRes();
         await crowdReportController.createReport(req, res);
         expect(res.status).toHaveBeenCalledWith(400);
@@ -156,7 +156,7 @@ describe('Field Report 2.1 — validate đầu vào tại Controller', () => {
 
     test('Khách (không đăng nhập) không có "name" → 400', async () => {
         const req = {
-            body: { level: 'Trung bình', lng: 106.7, lat: 10.8 },
+            body: { level: 'Mức 3', lng: 106.7, lat: 10.8 },
             user: null,
         };
         const res = mockRes();
@@ -169,7 +169,7 @@ describe('Field Report 2.1 — validate đầu vào tại Controller', () => {
     test('Quá 5 ảnh → 400', async () => {
         const tooMany = Array.from({ length: 6 }, (_, i) => `https://cdn/p${i}.jpg`);
         const req = {
-            body: { name: 'A', level: 'Trung bình', lng: 106.7, lat: 10.8, photo_urls: tooMany },
+            body: { name: 'A', level: 'Mức 3', lng: 106.7, lat: 10.8, photo_urls: tooMany },
             user: null,
         };
         const res = mockRes();
@@ -181,7 +181,7 @@ describe('Field Report 2.1 — validate đầu vào tại Controller', () => {
     test('Đăng nhập + đủ trường + có ảnh → controller truyền đúng (lng, lat, photo_url) vào model', async () => {
         const req = {
             body: {
-                level: 'Nặng',
+                level: 'Mức 5',
                 lng: 106.7012,
                 lat: 10.7758,
                 photo_url: 'https://cdn/uploads/main.jpg',
@@ -199,7 +199,7 @@ describe('Field Report 2.1 — validate đầu vào tại Controller', () => {
         // args: (reporter_name, reporter_id, level, lng, lat, photoUrlFinal, location_description, content, photo_urls)
         expect(args[0]).toBe('Minh Demo');
         expect(args[1]).toBe('7');
-        expect(args[2]).toBe('Nặng');
+        expect(args[2]).toBe('Mức 5');
         expect(args[3]).toBe(106.7012);
         expect(args[4]).toBe(10.7758);
         expect(args[5]).toBe('https://cdn/uploads/main.jpg');

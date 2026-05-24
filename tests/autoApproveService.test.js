@@ -7,7 +7,7 @@ const sensorRepository = require('../src/repositories/sensorRepository');
 
 const baseReport = {
     id: 10,
-    flood_level: 'Nhẹ',
+    flood_level: 'Mức 3',
     moderation_status: 'pending',
     auto_approved: false,
     sensor_verified: false,
@@ -41,8 +41,8 @@ describe('checkAutoApprove', () => {
         expect(result.nearbyCount).toBe(3);
         expect(result.autoApproved).toBe(false);
         expect(result.autoApprovedCount).toBe(0);
-        expect(updateClusterCountSpy).toHaveBeenCalledWith(10.828, 106.735, 'Nhẹ', 3, 150);
-        expect(updateSensorClusterSpy).toHaveBeenCalledWith(10.828, 106.735, 'Nhẹ', false, 150);
+        expect(updateClusterCountSpy).toHaveBeenCalledWith(10.828, 106.735, 'Mức 3', 3, 150);
+        expect(updateSensorClusterSpy).toHaveBeenCalledWith(10.828, 106.735, 'Mức 3', false, 150);
         expect(applyClusterSpy).not.toHaveBeenCalled();
     });
 
@@ -61,7 +61,7 @@ describe('checkAutoApprove', () => {
         expect(result.autoApproved).toBe(true);
         expect(result.autoApprovedCount).toBe(5);
         expect(result.autoApprovedIds).toEqual([115, 116, 117, 118, 119]);
-        expect(applyClusterSpy).toHaveBeenCalledWith(10.828, 106.735, 'Nhẹ', 150);
+        expect(applyClusterSpy).toHaveBeenCalledWith(10.828, 106.735, 'Mức 3', 150);
     });
 
     test('>= 5 báo cáo, có sensor → sensor_verified true cho cụm', async () => {
@@ -79,7 +79,7 @@ describe('checkAutoApprove', () => {
         const result = await autoApproveService.checkAutoApprove(10);
 
         expect(result.sensorVerified).toBe(true);
-        expect(updateSensorClusterSpy).toHaveBeenCalledWith(10.828, 106.735, 'Nhẹ', true, 150);
+        expect(updateSensorClusterSpy).toHaveBeenCalledWith(10.828, 106.735, 'Mức 3', true, 150);
     });
 });
 

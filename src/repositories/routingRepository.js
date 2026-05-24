@@ -1,4 +1,5 @@
 const BaseRepository = require('./baseRepository');
+const { sqlFloodLevelToCmLowerTrim } = require('../utils/floodLevelMapper');
 
 class RoutingRepository extends BaseRepository {
     async getNearestNode({ lng, lat, maxDistanceMeters = 1500 }) {
@@ -42,12 +43,7 @@ class RoutingRepository extends BaseRepository {
                     location,
                     reliability_score,
                     EXTRACT(EPOCH FROM (NOW() - created_at)) / 3600.0 AS age_hours,
-                    CASE
-                        WHEN LOWER(TRIM(flood_level)) IN ('nhẹ', 'nhe', 'light', 'mild') THEN 12
-                        WHEN LOWER(TRIM(flood_level)) IN ('trung bình', 'trung binh', 'medium', 'moderate') THEN 25
-                        WHEN LOWER(TRIM(flood_level)) IN ('nặng', 'nang', 'heavy', 'severe') THEN 45
-                        ELSE NULL
-                    END AS flood_cm
+                    ${sqlFloodLevelToCmLowerTrim('flood_level')} AS flood_cm
                 FROM crowd_reports
                 WHERE moderation_status = 'approved'
                   AND COALESCE(reliability_score, 50) >= $4

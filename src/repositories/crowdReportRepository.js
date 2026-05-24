@@ -1,6 +1,7 @@
 const BaseRepository = require('./baseRepository');
 const sensorRepository = require('./sensorRepository');
 const userRepository = require('./userRepository');
+const { floodLevelToCm } = require('../utils/floodLevelMapper');
 
 /** SELECT chuẩn + tên người kiểm duyệt (users.full_name hoặc username). */
 const CROWD_REPORT_SELECT = `
@@ -236,7 +237,7 @@ class CrowdReportRepository extends BaseRepository {
      * Tạo báo cáo mới từ người dân với xác minh chéo
      * @param {string} name - Tên người báo cáo
      * @param {number} reporterId - ID người báo cáo (user ID từ token, có thể null)
-     * @param {string} level - Mức độ ngập (Nhẹ, Trung bình, Nặng)
+     * @param {string} level - Mức độ ngập (Mức 1 … Mức 5)
      * @param {number} lng - Longitude
      * @param {number} lat - Latitude
      * @param {string} photoUrl - URL ảnh đầu (tương thích BE cũ)
@@ -324,13 +325,7 @@ class CrowdReportRepository extends BaseRepository {
                 const sensor = sensors[0];
                 const sensorWaterLevel = sensor.water_level || 0;
                 
-                // Chuyển đổi flood_level sang cm để so sánh
-                const levelMap = {
-                    'Nhẹ': 10,      // Đến mắt cá (~10cm)
-                    'Trung bình': 30, // Đến đầu gối (~30cm)
-                    'Nặng': 50       // Ngập nửa xe (~50cm)
-                };
-                const reportLevel = levelMap[floodLevel] || 0;
+                const reportLevel = floodLevelToCm(floodLevel);
                 
                 // Xác minh: Nếu sensor báo ngập VÀ người dân báo ngập -> Xác thực 100%
                 if (sensor.status === 'danger' || sensor.status === 'warning') {

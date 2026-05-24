@@ -83,8 +83,15 @@ def haversine(lng1, lat1, lng2, lat2):
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 def parse_crowd_level(level_str):
-    l = str(level_str).lower()
-    if 'nặng' in l or 'cao' in l: return 40.0
-    if 'vừa' in l or 'trung bình' in l: return 20.0
-    if 'nhẹ' in l or 'thấp' in l: return 10.0
+    l = str(level_str).lower().strip()
+    if 'muc 5' in l or 'mức 5' in l or l in ('5',) or 'nặng' in l or 'heavy' in l or 'severe' in l:
+        return 55.0
+    if 'muc 4' in l or 'mức 4' in l or l in ('4',):
+        return 40.0
+    if 'muc 3' in l or 'mức 3' in l or l in ('3',) or 'trung bình' in l or 'medium' in l:
+        return 30.0
+    if 'muc 2' in l or 'mức 2' in l or l in ('2',):
+        return 20.0
+    if 'muc 1' in l or 'mức 1' in l or l in ('1',) or 'nhẹ' in l or 'light' in l or 'minor' in l:
+        return 10.0
     return 0.0

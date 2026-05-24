@@ -131,8 +131,8 @@ router.get('/crowd-reports/all', authenticate, crowdReportController.getAllRepor
  *                 example: user123
  *               level:
  *                 type: string
- *                 enum: [Nhẹ, Trung bình, Nặng]
- *                 example: Nặng
+ *                 enum: [Mức 1, Mức 2, Mức 3, Mức 4, Mức 5]
+ *                 example: Mức 3
  *               lng:
  *                 type: number
  *                 format: float
