@@ -3,82 +3,66 @@
  */
 const React = require('react');
 const { render, screen } = require('@testing-library/react');
-const { ReportStatusBadge } = require('./ReportStatusBadge');
+const {
+    ReportStatusBadge,
+    ModerationStatusBadge,
+    ValidationStatusBadge
+} = require('./ReportStatusBadge');
 
-describe('ReportStatusBadge', () => {
-    test('auto_approved → badge Tự động duyệt', () => {
+describe('ModerationStatusBadge — chỉ kiểm duyệt', () => {
+    test('pending → Chờ duyệt', () => {
+        render(<ModerationStatusBadge report={{ moderation_status: 'pending' }} />);
+        expect(screen.getByTestId('badge-pending').textContent).toMatch(/Chờ duyệt/);
+    });
+
+    test('auto_approved → Tự động duyệt', () => {
         render(
-            <ReportStatusBadge
-                report={{
-                    moderation_status: 'approved',
-                    auto_approved: true,
-                    sensor_verified: true,
-                    nearby_report_count: 5
-                }}
+            <ModerationStatusBadge
+                report={{ moderation_status: 'approved', auto_approved: true }}
             />
         );
         expect(screen.getByTestId('badge-auto-approved').textContent).toMatch(/Tự động duyệt/);
     });
 
-    test('pending, nearby 3/5 → badge Gần tự duyệt', () => {
+    test('cross_verified vẫn hiện Chờ duyệt nếu moderation pending', () => {
+        render(
+            <ModerationStatusBadge
+                report={{
+                    moderation_status: 'pending',
+                    validation_status: 'cross_verified'
+                }}
+            />
+        );
+        expect(screen.getByTestId('badge-pending').textContent).toMatch(/Chờ duyệt/);
+        expect(screen.queryByTestId('badge-cross-verified')).toBeNull();
+    });
+});
+
+describe('ValidationStatusBadge — chỉ xác minh chéo', () => {
+    test('cross_verified → Xác minh chéo', () => {
+        render(<ValidationStatusBadge report={{ validation_status: 'cross_verified' }} />);
+        expect(screen.getByTestId('badge-cross-verified').textContent).toMatch(/Xác minh chéo/);
+    });
+
+    test('pending → Chưa xác minh chéo', () => {
+        render(<ValidationStatusBadge report={{ validation_status: 'pending' }} />);
+        expect(screen.getByTestId('badge-validation-pending').textContent).toMatch(
+            /Chưa xác minh chéo/
+        );
+    });
+});
+
+describe('ReportStatusBadge — 2 badge tách riêng', () => {
+    test('pending + cross_verified → cả Chờ duyệt và Xác minh chéo', () => {
         render(
             <ReportStatusBadge
                 report={{
                     moderation_status: 'pending',
-                    auto_approved: false,
-                    sensor_verified: false,
-                    nearby_report_count: 3
+                    validation_status: 'cross_verified'
                 }}
             />
         );
-        expect(screen.getByTestId('badge-pending-auto').textContent).toMatch(/Gần tự duyệt \(3\/5\)/);
-    });
-
-    test('pending, không gần ngưỡng, có sensor → Có cảm biến', () => {
-        render(
-            <ReportStatusBadge
-                report={{
-                    moderation_status: 'pending',
-                    auto_approved: false,
-                    sensor_verified: true,
-                    nearby_report_count: 0
-                }}
-            />
-        );
-        expect(screen.getByTestId('badge-sensor-verified').textContent).toMatch(/Có cảm biến/);
-    });
-
-    test('pending thủ công → Chờ duyệt thủ công', () => {
-        render(
-            <ReportStatusBadge
-                report={{
-                    moderation_status: 'pending',
-                    auto_approved: false,
-                    sensor_verified: false,
-                    nearby_report_count: 0
-                }}
-            />
-        );
-        expect(screen.getByTestId('badge-pending-manual').textContent).toMatch(/Chờ duyệt thủ công/);
-    });
-
-    test('rejected → Đã từ chối', () => {
-        render(
-            <ReportStatusBadge report={{ moderation_status: 'rejected', auto_approved: false }} />
-        );
-        expect(screen.getByTestId('badge-rejected').textContent).toMatch(/Đã từ chối/);
-    });
-
-    test('approved thủ công (không auto) → Đã duyệt', () => {
-        render(
-            <ReportStatusBadge
-                report={{
-                    moderation_status: 'approved',
-                    auto_approved: false,
-                    nearby_report_count: 0
-                }}
-            />
-        );
-        expect(screen.getByTestId('badge-approved').textContent).toMatch(/Đã duyệt/);
+        expect(screen.getByTestId('badge-pending').textContent).toMatch(/Chờ duyệt/);
+        expect(screen.getByTestId('badge-cross-verified').textContent).toMatch(/Xác minh chéo/);
     });
 });

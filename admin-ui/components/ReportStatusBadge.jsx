@@ -3,12 +3,12 @@ const React = require('react');
 const AUTO_APPROVE_THRESHOLD = 5;
 
 /**
- * Badge trạng thái báo cáo trên trang Admin.
+ * Chỉ trạng thái kiểm duyệt (pending / duyệt / từ chối / tự động duyệt).
  */
-function ReportStatusBadge({ report }) {
+function ModerationStatusBadge({ report }) {
     if (!report) {
         return (
-            <span data-testid="badge-unknown" className="badge badge-unknown">
+            <span data-testid="badge-moderation-unknown" className="badge badge-unknown">
                 Không xác định
             </span>
         );
@@ -16,7 +16,6 @@ function ReportStatusBadge({ report }) {
 
     const status = report.moderation_status || report.status;
     const autoApproved = Boolean(report.auto_approved);
-    const sensorVerified = Boolean(report.sensor_verified);
     const nearby = Number(report.nearby_report_count) || 0;
 
     if (status === 'rejected') {
@@ -43,39 +42,87 @@ function ReportStatusBadge({ report }) {
         );
     }
 
-    if (
-        status === 'pending' &&
-        nearby > 0 &&
-        nearby < AUTO_APPROVE_THRESHOLD
-    ) {
-        return (
-            <span data-testid="badge-pending-auto" className="badge badge-pending-auto">
-                Gần tự duyệt ({nearby}/{AUTO_APPROVE_THRESHOLD})
-            </span>
-        );
-    }
-
-    if (sensorVerified) {
-        return (
-            <span data-testid="badge-sensor-verified" className="badge badge-sensor-verified">
-                Có cảm biến
-            </span>
-        );
-    }
-
     if (status === 'pending') {
         return (
-            <span data-testid="badge-pending-manual" className="badge badge-pending-manual">
-                Chờ duyệt thủ công
+            <span data-testid="badge-pending" className="badge badge-pending">
+                Chờ duyệt
+                {nearby > 0 && nearby < AUTO_APPROVE_THRESHOLD ? (
+                    <small data-testid="badge-pending-auto-hint" className="badge-hint">
+                        {' '}
+                        (Gần tự duyệt {nearby}/{AUTO_APPROVE_THRESHOLD})
+                    </small>
+                ) : null}
             </span>
         );
     }
 
     return (
-        <span data-testid="badge-unknown" className="badge badge-unknown">
+        <span data-testid="badge-moderation-unknown" className="badge badge-unknown">
             Không xác định
         </span>
     );
 }
 
-module.exports = { ReportStatusBadge, AUTO_APPROVE_THRESHOLD };
+/**
+ * Chỉ xác minh chéo sensor — tách khỏi kiểm duyệt.
+ */
+function ValidationStatusBadge({ report }) {
+    if (!report) {
+        return (
+            <span data-testid="badge-validation-pending" className="badge badge-validation-pending">
+                Chưa xác minh chéo
+            </span>
+        );
+    }
+
+    const vs = report.validation_status || 'pending';
+
+    if (vs === 'cross_verified') {
+        return (
+            <span data-testid="badge-cross-verified" className="badge badge-cross-verified">
+                Xác minh chéo
+            </span>
+        );
+    }
+    if (vs === 'verified') {
+        return (
+            <span data-testid="badge-validation-verified" className="badge badge-validation-verified">
+                Đã xác minh
+            </span>
+        );
+    }
+    if (vs === 'rejected') {
+        return (
+            <span data-testid="badge-validation-rejected" className="badge badge-validation-rejected">
+                Xác minh không đạt
+            </span>
+        );
+    }
+
+    return (
+        <span data-testid="badge-validation-pending" className="badge badge-validation-pending">
+            Chưa xác minh chéo
+        </span>
+    );
+}
+
+/**
+ * Admin: 2 badge độc lập — kiểm duyệt + xác minh chéo.
+ */
+function ReportStatusBadge({ report, showValidation = true }) {
+    return (
+        <div data-testid="report-status-badges" className="report-status-badges">
+            <ModerationStatusBadge report={report} />
+            {showValidation ? (
+                <ValidationStatusBadge report={report} />
+            ) : null}
+        </div>
+    );
+}
+
+module.exports = {
+    ReportStatusBadge,
+    ModerationStatusBadge,
+    ValidationStatusBadge,
+    AUTO_APPROVE_THRESHOLD
+};

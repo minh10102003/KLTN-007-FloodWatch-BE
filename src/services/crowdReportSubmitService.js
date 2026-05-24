@@ -2,6 +2,7 @@ const crowdReportModel = require('../models/crowdReportModel');
 const userModel = require('../models/userModel');
 const { mapFloodLevel, VALID_LEVELS } = require('../utils/floodLevelMapper');
 const { emitAdminNotification } = require('../socket/adminSocket');
+const { getModerationDisplay, getValidationDisplay } = require('../utils/reportDisplayStatus');
 
 /**
  * Tạo crowd report — dùng chung form API và chat agent confirm.
@@ -80,20 +81,31 @@ async function submitCrowdReport({ user, body }) {
         reportId: result.id
     });
 
-    let message = 'Cảm ơn bạn đã báo cáo!';
-    if (result.verified_by_sensor) {
-        message = 'Báo cáo của bạn đã được xác minh bởi hệ thống cảm biến. Cảm ơn!';
+    const moderationStatus = result.moderation_status || 'pending';
+    const reportForDisplay = {
+        moderation_status: moderationStatus,
+        validation_status: result.validation_status,
+        verified_by_sensor: result.verified_by_sensor
+    };
+
+    let message = 'Cảm ơn bạn đã báo cáo! Báo cáo đang chờ moderator duyệt.';
+    if (result.validation_status === 'cross_verified') {
+        message =
+            'Báo cáo đã xác minh chéo với cảm biến. Vẫn cần moderator duyệt trước khi hiển thị trên bản đồ công khai.';
     } else if (result.validation_status === 'pending') {
-        message = 'Báo cáo của bạn đang được xem xét. Cảm ơn!';
+        message = 'Báo cáo đang chờ xác minh và moderator duyệt. Cảm ơn!';
     }
 
     return {
         message,
         data: {
             id: result.id,
+            moderation_status: moderationStatus,
             validation_status: result.validation_status,
             verified_by_sensor: result.verified_by_sensor,
-            reporter_id
+            reporter_id,
+            display_moderation: getModerationDisplay(reportForDisplay),
+            display_validation: getValidationDisplay(reportForDisplay)
         }
     };
 }

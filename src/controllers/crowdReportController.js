@@ -2,6 +2,11 @@ const crowdReportModel = require('../models/crowdReportModel');
 const { submitCrowdReport } = require('../services/crowdReportSubmitService');
 const { withFullPhotoUrls } = require('../utils/photoUrl');
 const { withReportConfidence } = require('../utils/reportConfidence');
+const { withReportDisplayStatus } = require('../utils/reportDisplayStatus');
+
+function enrichReportRows(req, data) {
+    return withFullPhotoUrls(req, withReportDisplayStatus(withReportConfidence(data)));
+}
 
 const crowdReportController = {
     // Lấy các báo cáo từ người dân trong vòng 24 giờ qua (photo_url trả full URL)
@@ -13,7 +18,7 @@ const crowdReportController = {
                 moderation_status,
                 validation_status
             );
-            res.json({ success: true, data: withFullPhotoUrls(req, withReportConfidence(data)) });
+            res.json({ success: true, data: enrichReportRows(req, data) });
         } catch (err) {
             res.status(500).json({ success: false, error: err.message });
         }
@@ -30,7 +35,7 @@ const crowdReportController = {
             
             res.json({ 
                 success: true, 
-                data: withFullPhotoUrls(req, withReportConfidence(data)) 
+                data: enrichReportRows(req, data)
             });
         } catch (err) {
             res.status(500).json({ 

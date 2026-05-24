@@ -19,6 +19,9 @@ const CROWD_REPORT_SELECT = `
     NULLIF(TRIM(COALESCE(mod.full_name, mod.username)), '') AS moderated_by_name,
     cr.moderated_at,
     cr.rejection_reason,
+    cr.auto_approved,
+    cr.sensor_verified,
+    cr.nearby_report_count,
     ST_X(cr.location::geometry) AS lng,
     ST_Y(cr.location::geometry) AS lat,
     cr.created_at
@@ -272,7 +275,7 @@ class CrowdReportRepository extends BaseRepository {
                 photo_urls
             )
             VALUES ($1, $2, $3, ST_SetSRID(ST_MakePoint($4, $5), 4326)::geography, $6, $7, $8, $9, $10, $11::jsonb)
-            RETURNING id, validation_status, verified_by_sensor
+            RETURNING id, validation_status, verified_by_sensor, moderation_status
         `;
         
         const result = await this.queryOne(query, [
