@@ -138,12 +138,13 @@ class CrowdReportRepository extends BaseRepository {
                 moderated_at = CURRENT_TIMESTAMP,
                 rejection_reason = $3
             WHERE id = $4
+              AND COALESCE(auto_approved, FALSE) = FALSE
             RETURNING *
         `;
         const result = await this.queryOne(query, [moderationStatus, moderatorId, rejectionReason, reportId]);
 
         if (!result) {
-            throw new Error(`Không tìm thấy báo cáo với ID: ${reportId}`);
+            throw new Error(`Không thể kiểm duyệt báo cáo ${reportId} (có thể đã tự động duyệt)`);
         }
 
         return await this.getReportById(reportId);
@@ -173,6 +174,7 @@ class CrowdReportRepository extends BaseRepository {
             SELECT ${CROWD_REPORT_SELECT}
             ${CROWD_REPORT_FROM}
             WHERE cr.moderation_status = 'pending'
+              AND COALESCE(cr.auto_approved, FALSE) = FALSE
             ORDER BY cr.created_at DESC
             LIMIT $1
         `;

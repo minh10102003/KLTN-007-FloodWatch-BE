@@ -212,4 +212,26 @@ describe('Admin Moderation 2.2 — Controller validate action + 404', () => {
         expect(body.message).toMatch(/duyệt/i);
         expect(body.data.moderation_status).toBe('approved');
     });
+
+    test('Báo cáo đã auto_approved → 409, không cho duyệt/từ chối thủ công', async () => {
+        jest.spyOn(crowdReportRepository, 'getReportById').mockResolvedValueOnce(
+            makeReportRow({ moderation_status: 'approved', auto_approved: true })
+        );
+        const moderateSpy = jest.spyOn(crowdReportRepository, 'moderateReport');
+
+        const req = {
+            params: { reportId: '42' },
+            body: { action: 'reject' },
+            user: { id: 99, username: 'admin' },
+            protocol: 'https',
+            get: () => 'api.floodsight.id.vn',
+        };
+        const res = mockRes();
+
+        await reportModerationController.moderateReport(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(409);
+        expect(res.json.mock.calls[0][0].error).toMatch(/tự động duyệt/i);
+        expect(moderateSpy).not.toHaveBeenCalled();
+    });
 });

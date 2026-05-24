@@ -74,6 +74,13 @@ const reportModerationController = {
                 });
             }
 
+            if (existingReport.auto_approved === true) {
+                return res.status(409).json({
+                    success: false,
+                    error: 'Báo cáo đã được tự động duyệt, không thể duyệt/từ chối thủ công'
+                });
+            }
+
             console.log(`📝 [Moderation] ${req.user.username} (ID: ${req.user.id}) ${action}ing report ${reportIdNum} (current status: ${existingReport.moderation_status})`);
 
             const data = await crowdReportRepository.moderateReport(
