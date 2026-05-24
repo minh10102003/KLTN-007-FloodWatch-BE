@@ -170,6 +170,7 @@ router.post(
  *         description: Chỉ moderator hoặc admin mới có quyền
  */
 router.put('/:reportId/moderate', authenticate, requireModerator, reportModerationController.moderateReport);
+router.patch('/:reportId/moderate', authenticate, requireModerator, reportModerationController.moderateReport);
 
 /**
  * @swagger

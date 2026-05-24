@@ -46,7 +46,17 @@ const reportModerationController = {
     moderateReport: async (req, res) => {
         try {
             const { reportId } = req.params;
-            const { action, rejection_reason } = req.body; // action: 'approve' hoặc 'reject'
+            const body = req.body || {};
+            let action = body.action;
+            if (!action && body.moderation_status) {
+                if (body.moderation_status === 'approved') action = 'approve';
+                else if (body.moderation_status === 'rejected') action = 'reject';
+            }
+            if (!action && body.status) {
+                if (body.status === 'approved') action = 'approve';
+                else if (body.status === 'rejected') action = 'reject';
+            }
+            const rejection_reason = body.rejection_reason ?? body.reason;
 
             // Validate reportId
             const reportIdNum = parseInt(reportId);

@@ -96,6 +96,9 @@ app.use('/api/sensors', sensorRoutes);
 app.use('/api/alerts', alertRoutes);
 app.use('/api/reports', reportSummaryRoutes);
 app.use('/api/reports', reportModerationRoutes);
+/** Alias cho Admin FE (hcm-flood-admin): /api/admin/reports/... */
+app.use('/api/admin/reports', reportSummaryRoutes);
+app.use('/api/admin/reports', reportModerationRoutes);
 app.use('/api/report-evaluations', reportEvaluationRoutes);
 app.use('/api/emergency-subscriptions', emergencySubscriptionRoutes);
 app.use('/api/heatmap', heatmapRoutes);
