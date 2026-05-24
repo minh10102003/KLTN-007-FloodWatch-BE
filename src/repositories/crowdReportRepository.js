@@ -293,7 +293,11 @@ class CrowdReportRepository extends BaseRepository {
         if (validation.verified && reporterId) {
             await this.updateReliabilityScore(reporterId, true);
         }
-        
+
+        require('../services/autoApproveService')
+            .checkAutoApprove(result.id)
+            .catch((err) => console.error('❌ [AutoApprove] checkAutoApprove:', err.message));
+
         return result;
     }
 

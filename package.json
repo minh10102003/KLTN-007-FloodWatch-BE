@@ -5,12 +5,14 @@
   "scripts": {
     "start": "node server.js",
     "start:render": "node server.js",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "jest",
+    "test:auto-approve": "jest tests/autoApproveService.test.js tests/reportSummaryApi.test.js admin-ui/components",
     "migrate": "node scripts/runMigration.js",
     "migrate:is-online": "node scripts/runMigrationIsOnline.js",
     "migrate:access-logs": "node scripts/runMigrationAccessLogs.js",
     "migrate:role-constraint": "node scripts/runMigrationRoleConstraint.js",
     "migrate:audit-logs": "node scripts/runMigrationAuditLogs.js",
+    "migrate:auto-approve": "node scripts/runMigrationAutoApprove.js",
     "migrate:photo-url": "node scripts/runMigrationPhotoUrl.js",
     "migrate:content-photo-urls": "node scripts/runMigrationContentPhotoUrls.js",
     "migrate:temperature-humidity": "node scripts/runMigrationTemperatureHumidity.js",
@@ -76,5 +78,16 @@
     "socket.io": "^4.8.1",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1"
+  },
+  "devDependencies": {
+    "@babel/preset-env": "^7.28.0",
+    "@babel/preset-react": "^7.27.1",
+    "@testing-library/dom": "^10.4.0",
+    "@testing-library/react": "^16.3.0",
+    "babel-jest": "^30.0.0",
+    "jest": "^30.0.0",
+    "jest-environment-jsdom": "^30.0.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
   }
 }
