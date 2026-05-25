@@ -67,7 +67,7 @@ describe('Field Report 2.1 — lưu Geometry + link ảnh xuống DB', () => {
             photoUrls,
         );
 
-        expect(result).toEqual({ id: 4242, validation_status: 'pending', verified_by_sensor: false });
+        expect(result).toEqual({ id: 4242, validation_status: 'pending', verified_by_sensor: false, no_sensor_coverage: false });
 
         const insertCall = querySpy.mock.calls.find(([sql]) => /INSERT\s+INTO\s+crowd_reports/i.test(sql));
         expect(insertCall).toBeDefined();
@@ -104,26 +104,32 @@ describe('Field Report 2.1 — lưu Geometry + link ảnh xuống DB', () => {
         expect(JSON.parse(params[10])).toEqual(['https://cdn/uploads/only.jpg']);
     });
 
-    test('Không có sensor trong 500m → ném lỗi NO_SENSOR_IN_RADIUS, KHÔNG ghi DB', async () => {
+    test('Không có sensor trong 500m → vẫn lưu DB, skip_auto_approve=true', async () => {
         sensorRepository.findSensorsInRadius.mockResolvedValueOnce([]);
         querySpy.mockClear();
+        querySpy.mockResolvedValue([
+            { id: 999, validation_status: 'pending', verified_by_sensor: false, moderation_status: 'pending' },
+        ]);
 
-        await expect(
-            crowdReportRepository.createReport(
-                'A',
-                null,
-                'Mức 3',
-                106.7,
-                10.8,
-                'https://x/p.jpg',
-                null,
-                null,
-                null,
-            ),
-        ).rejects.toMatchObject({ code: 'NO_SENSOR_IN_RADIUS' });
+        const result = await crowdReportRepository.createReport(
+            'A',
+            null,
+            'Mức 3',
+            106.7,
+            10.8,
+            'https://x/p.jpg',
+            null,
+            null,
+            null,
+        );
 
-        const insertCalls = querySpy.mock.calls.filter(([sql]) => /INSERT\s+INTO\s+crowd_reports/i.test(sql));
-        expect(insertCalls).toHaveLength(0);
+        expect(result.id).toBe(999);
+        expect(result.no_sensor_coverage).toBe(true);
+
+        const insertCall = querySpy.mock.calls.find(([sql]) => /INSERT\s+INTO\s+crowd_reports/i.test(sql));
+        expect(insertCall).toBeDefined();
+        const params = insertCall[1];
+        expect(params[params.length - 1]).toBe(true);
     });
 });
 

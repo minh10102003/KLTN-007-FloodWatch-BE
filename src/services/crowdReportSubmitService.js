@@ -90,10 +90,15 @@ async function submitCrowdReport({ user, body }) {
         verified_by_sensor: result.verified_by_sensor
     };
 
+    const noSensor = result.no_sensor_coverage;
+
     let message = 'Cảm ơn bạn đã báo cáo! Báo cáo đang chờ moderator duyệt.';
-    if (result.validation_status === 'cross_verified') {
+    if (noSensor) {
         message =
-            'Báo cáo đã xác minh chéo với cảm biến. Vẫn cần moderator duyệt trước khi hiển thị trên bản đồ công khai.';
+            'Khu vực chưa có cảm biến bao phủ. Báo cáo đã được ghi nhận và chờ moderator duyệt thủ công.';
+    } else if (result.validation_status === 'cross_verified') {
+        message =
+            'Báo cáo đã xác minh chéo với cảm biến. Có thể được tự động duyệt khi đủ báo cáo lân cận.';
     } else if (result.validation_status === 'pending') {
         message = 'Báo cáo đang chờ xác minh và moderator duyệt. Cảm ơn!';
     }
@@ -105,6 +110,7 @@ async function submitCrowdReport({ user, body }) {
             moderation_status: moderationStatus,
             validation_status: result.validation_status,
             verified_by_sensor: result.verified_by_sensor,
+            no_sensor_coverage: Boolean(result.no_sensor_coverage),
             reporter_id,
             display_moderation: getModerationDisplay(reportForDisplay),
             display_validation: getValidationDisplay(reportForDisplay)

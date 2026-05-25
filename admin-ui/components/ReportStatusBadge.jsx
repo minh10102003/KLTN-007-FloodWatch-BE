@@ -1,6 +1,6 @@
 const React = require('react');
 
-const AUTO_APPROVE_THRESHOLD = 5;
+const AUTO_APPROVE_THRESHOLD = 3;
 
 /**
  * Chỉ trạng thái kiểm duyệt (pending / duyệt / từ chối / tự động duyệt).

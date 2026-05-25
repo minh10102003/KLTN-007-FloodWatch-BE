@@ -247,14 +247,8 @@ class CrowdReportRepository extends BaseRepository {
      * @param {string[]} photoUrls - Mảng URL ảnh, tối đa 5 (optional)
      */
     async createReport(name, reporterId, level, lng, lat, photoUrl = null, locationDescription = null, content = null, photoUrls = null) {
-        // 1. Kiểm tra có sensor trong 500m không – không có thì không cho tạo báo cáo (đặc tả)
         const validation = await this.crossValidateWithSensors(lng, lat, level);
-        if (validation.noSensor) {
-            const err = new Error('NO_SENSOR_IN_RADIUS');
-            err.code = 'NO_SENSOR_IN_RADIUS';
-            throw err;
-        }
-        // 2. Lấy điểm tin cậy: user đăng nhập lấy từ users.reporter_reliability (Cách C), khách = 50
+        // Lấy điểm tin cậy: user đăng nhập lấy từ users.reporter_reliability (Cách C), khách = 50
         let reliabilityScore = 50;
         if (reporterId) {
             const userId = parseInt(reporterId, 10);
@@ -263,7 +257,7 @@ class CrowdReportRepository extends BaseRepository {
             }
         }
         
-        // 3. Tạo báo cáo (đã có sensor trong 500m)
+        const noSensorCoverage = Boolean(validation.noSensor);
         const urlsArray = Array.isArray(photoUrls) && photoUrls.length > 0 ? photoUrls : (photoUrl ? [photoUrl] : []);
         const query = `
             INSERT INTO crowd_reports (
@@ -276,9 +270,10 @@ class CrowdReportRepository extends BaseRepository {
                 verified_by_sensor,
                 photo_url,
                 content,
-                photo_urls
+                photo_urls,
+                skip_auto_approve
             )
-            VALUES ($1, $2, $3, ST_SetSRID(ST_MakePoint($4, $5), 4326)::geography, $6, $7, $8, $9, $10, $11::jsonb)
+            VALUES ($1, $2, $3, ST_SetSRID(ST_MakePoint($4, $5), 4326)::geography, $6, $7, $8, $9, $10, $11::jsonb, $12)
             RETURNING id, validation_status, verified_by_sensor, moderation_status
         `;
         
@@ -293,17 +288,21 @@ class CrowdReportRepository extends BaseRepository {
             validation.verified || false,
             photoUrl || (urlsArray[0] || null),
             content && String(content).trim() || null,
-            JSON.stringify(urlsArray)
+            JSON.stringify(urlsArray),
+            noSensorCoverage
         ]);
+
+        result.no_sensor_coverage = noSensorCoverage;
         
-        // 4. Cập nhật điểm tin cậy nếu được xác minh
         if (validation.verified && reporterId) {
             await this.updateReliabilityScore(reporterId, true);
         }
 
-        require('../services/autoApproveService')
-            .checkAutoApprove(result.id)
-            .catch((err) => console.error('❌ [AutoApprove] checkAutoApprove:', err.message));
+        if (!noSensorCoverage) {
+            require('../services/autoApproveService')
+                .checkAutoApprove(result.id)
+                .catch((err) => console.error('❌ [AutoApprove] checkAutoApprove:', err.message));
+        }
 
         return result;
     }
@@ -316,51 +315,39 @@ class CrowdReportRepository extends BaseRepository {
      */
     async crossValidateWithSensors(lng, lat, floodLevel) {
         try {
-            // Tìm các sensor trong bán kính 500m
             const sensors = await sensorRepository.findSensorsInRadius(lng, lat, 500);
-            // Đặc tả: Nếu không có sensor trong 500m → không cho phép gửi báo cáo
             if (sensors.length === 0) {
                 return { noSensor: true, verified: false, validation_status: 'pending' };
             }
-            if (sensors.length > 0) {
-                const sensor = sensors[0];
-                const sensorWaterLevel = sensor.water_level || 0;
-                
-                const reportLevel = floodLevelToCm(floodLevel);
-                
-                // Xác minh: Nếu sensor báo ngập VÀ người dân báo ngập -> Xác thực 100%
-                if (sensor.status === 'danger' || sensor.status === 'warning') {
-                    if (sensorWaterLevel >= reportLevel * 0.7) { // Cho phép sai số 30%
-                        return {
-                            verified: true,
-                            sensor_id: sensor.sensor_id,
-                            sensor_water_level: sensorWaterLevel,
-                            validation_status: 'cross_verified'
-                        };
-                    }
-                }
-                
-                // Nếu chỉ có người dân báo mà sensor báo bình thường -> Chờ kiểm tra
-                if (sensor.status === 'normal' && sensorWaterLevel < 10) {
-                    return {
-                        verified: false,
-                        sensor_id: sensor.sensor_id,
-                        sensor_water_level: sensorWaterLevel,
-                        validation_status: 'pending'
-                    };
-                }
+
+            const sensor = sensors[0];
+            const sensorWaterLevel = sensor.water_level || 0;
+            const reportLevel = floodLevelToCm(floodLevel);
+            const st = sensor.status;
+
+            const isFloodStatus = st === 'warning' || st === 'elevated' || st === 'danger' || st === 'critical';
+            if (isFloodStatus && sensorWaterLevel >= reportLevel * 0.7) {
+                return {
+                    verified: true,
+                    sensor_id: sensor.sensor_id,
+                    sensor_water_level: sensorWaterLevel,
+                    validation_status: 'cross_verified'
+                };
             }
-            
-            return {
-                verified: false,
-                validation_status: 'pending'
-            };
+
+            if (st === 'normal' && sensorWaterLevel < 10) {
+                return {
+                    verified: false,
+                    sensor_id: sensor.sensor_id,
+                    sensor_water_level: sensorWaterLevel,
+                    validation_status: 'pending'
+                };
+            }
+
+            return { verified: false, validation_status: 'pending' };
         } catch (err) {
             console.error('❌ [Validation] Error cross-validating:', err.message);
-            return {
-                verified: false,
-                validation_status: 'pending'
-            };
+            return { verified: false, validation_status: 'pending' };
         }
     }
 

@@ -60,12 +60,6 @@ const crowdReportController = {
             if (err.code === 'VALIDATION') {
                 return res.status(400).json({ success: false, error: err.message });
             }
-            if (err.code === 'NO_SENSOR_IN_RADIUS') {
-                return res.status(400).json({
-                    success: false,
-                    error: 'Hiện tại khu vực chưa có máy đo, không thể xác thực'
-                });
-            }
             res.status(500).json({ success: false, error: err.message });
         }
     }

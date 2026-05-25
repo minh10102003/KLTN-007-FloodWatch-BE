@@ -19,20 +19,23 @@ function getModerationDisplay(report) {
         }
         return { key: 'approved', label: 'Đã duyệt' };
     }
-  if (status === 'pending') {
+    if (status === 'pending') {
         if (report.skip_auto_approve) {
             return {
-                key: 'pending_skip_auto',
-                label: 'Chờ duyệt',
-                hint: 'Đã bỏ qua auto-approve'
+                key: 'pending_manual_only',
+                label: 'Chờ duyệt thủ công',
+                hint: report.no_sensor_coverage
+                    ? 'Khu vực không có cảm biến'
+                    : 'Đã bỏ qua auto-approve'
             };
         }
         const nearby = Number(report.nearby_report_count) || 0;
-        if (nearby > 0 && nearby < 5) {
+        const sensorOk = Boolean(report.sensor_verified);
+        if (sensorOk && nearby > 0 && nearby < 3) {
             return {
                 key: 'pending_near_auto',
                 label: 'Chờ duyệt',
-                hint: `Gần tự duyệt (${nearby}/5)`
+                hint: `Gần tự duyệt (${nearby}/3)`
             };
         }
         return { key: 'pending', label: 'Chờ duyệt' };
@@ -56,6 +59,10 @@ function getValidationDisplay(report) {
     }
     if (vs === 'rejected') {
         return { key: 'validation_rejected', label: 'Xác minh không đạt' };
+    }
+
+    if (report.skip_auto_approve && !report.sensor_verified) {
+        return { key: 'no_sensor', label: 'Không có cảm biến gần' };
     }
 
     return { key: 'validation_pending', label: 'Chưa xác minh chéo' };

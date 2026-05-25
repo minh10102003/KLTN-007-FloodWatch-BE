@@ -1,14 +1,10 @@
 const sensorRepository = require('../repositories/sensorRepository');
 const crowdReportAutoApproveRepository = require('../repositories/crowdReportAutoApproveRepository');
 
-const AUTO_APPROVE_THRESHOLD = 5;
-/** 150m: 100m quá hẹp — user chọn gần nhau trên map vẫn có thể cách ~115m thực tế */
+const AUTO_APPROVE_THRESHOLD = 3;
 const NEARBY_RADIUS_METERS = Number(process.env.AUTO_APPROVE_RADIUS_METERS) || 150;
 const SENSOR_VERIFY_RADIUS_METERS = 500;
 
-/**
- * Đếm báo cáo trong bán kính, cùng flood_level.
- */
 async function countNearbyReports(lat, lng, floodLevel, radiusMeters = NEARBY_RADIUS_METERS) {
     return crowdReportAutoApproveRepository.countNearbyReports(
         lat,
@@ -19,7 +15,8 @@ async function countNearbyReports(lat, lng, floodLevel, radiusMeters = NEARBY_RA
 }
 
 /**
- * Có cảm biến active trong khu vực với dấu hiệu ngập (warning/danger hoặc mực nước đáng kể).
+ * Có cảm biến active trong khu vực với dấu hiệu ngập
+ * (warning/elevated/danger/critical hoặc mực nước >= 10cm).
  */
 async function verifySensorInArea(lat, lng) {
     const sensors = await sensorRepository.findSensorsInRadius(
@@ -29,15 +26,19 @@ async function verifySensorInArea(lat, lng) {
     );
     if (!sensors || sensors.length === 0) return false;
     return sensors.some((s) => {
-        if (s.status === 'warning' || s.status === 'danger') return true;
+        const st = s.status;
+        if (st === 'warning' || st === 'elevated' || st === 'danger' || st === 'critical') return true;
         const level = Number(s.water_level);
         return Number.isFinite(level) && level >= 10;
     });
 }
 
 /**
- * Kiểm tra và auto-approve cả cụm nếu đủ 5 báo cáo lân cận cùng mức ngập.
- * Khi đủ ngưỡng: duyệt TẤT CẢ pending trong bán kính (mặc định 150m).
+ * Auto-approve khi ĐỦ 2 điều kiện:
+ *   1. sensorVerified = true (có sensor xác minh ngập trong 500m)
+ *   2. >= 3 báo cáo lân cận cùng mức ngập (trong 150m)
+ *
+ * Khu vực không có sensor → chỉ duyệt thủ công bởi moderator.
  */
 async function checkAutoApprove(reportId) {
     const report = await crowdReportAutoApproveRepository.getReportForAutoApprove(reportId);
@@ -70,7 +71,7 @@ async function checkAutoApprove(reportId) {
     );
 
     let approvedRows = [];
-    if (count >= AUTO_APPROVE_THRESHOLD) {
+    if (sensorVerified && count >= AUTO_APPROVE_THRESHOLD) {
         approvedRows = await crowdReportAutoApproveRepository.applyAutoApproveCluster(
             report.lat,
             report.lng,

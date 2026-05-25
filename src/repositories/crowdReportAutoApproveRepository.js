@@ -1,6 +1,6 @@
 const BaseRepository = require('./baseRepository');
 
-const AUTO_APPROVE_THRESHOLD = 5;
+const AUTO_APPROVE_THRESHOLD = 3;
 
 /**
  * Repository bổ sung cho auto-approve (không sửa crowdReportRepository).

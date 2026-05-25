@@ -1,5 +1,6 @@
 /**
- * Kiểm thử auto-approve: <5, >=5 không sensor, >=5 có sensor, duyệt cả cụm.
+ * Kiểm thử auto-approve: sensor + >= 3 báo cáo mới auto-approve.
+ * Không có sensor → chỉ duyệt thủ công.
  */
 const autoApproveService = require('../src/services/autoApproveService');
 const crowdReportAutoApproveRepository = require('../src/repositories/crowdReportAutoApproveRepository');
@@ -21,10 +22,12 @@ describe('checkAutoApprove', () => {
         jest.restoreAllMocks();
     });
 
-    test('< 5 báo cáo lân cận → giữ pending, cập nhật count cả cụm', async () => {
+    test('< 3 báo cáo lân cận → giữ pending, cập nhật count cả cụm', async () => {
         jest.spyOn(crowdReportAutoApproveRepository, 'getReportForAutoApprove').mockResolvedValue(baseReport);
-        jest.spyOn(crowdReportAutoApproveRepository, 'countNearbyReports').mockResolvedValue(3);
-        jest.spyOn(sensorRepository, 'findSensorsInRadius').mockResolvedValue([]);
+        jest.spyOn(crowdReportAutoApproveRepository, 'countNearbyReports').mockResolvedValue(2);
+        jest.spyOn(sensorRepository, 'findSensorsInRadius').mockResolvedValue([
+            { status: 'warning', water_level: 15 }
+        ]);
         const updateClusterCountSpy = jest
             .spyOn(crowdReportAutoApproveRepository, 'updateNearbyCountsInCluster')
             .mockResolvedValue(undefined);
@@ -38,37 +41,59 @@ describe('checkAutoApprove', () => {
         const result = await autoApproveService.checkAutoApprove(10);
 
         expect(result.ok).toBe(true);
-        expect(result.nearbyCount).toBe(3);
+        expect(result.nearbyCount).toBe(2);
+        expect(result.sensorVerified).toBe(true);
         expect(result.autoApproved).toBe(false);
         expect(result.autoApprovedCount).toBe(0);
-        expect(updateClusterCountSpy).toHaveBeenCalledWith(10.828, 106.735, 'Mức 3', 3, 150);
-        expect(updateSensorClusterSpy).toHaveBeenCalledWith(10.828, 106.735, 'Mức 3', false, 150);
+        expect(updateClusterCountSpy).toHaveBeenCalledWith(10.828, 106.735, 'Mức 3', 2, 150);
+        expect(updateSensorClusterSpy).toHaveBeenCalledWith(10.828, 106.735, 'Mức 3', true, 150);
         expect(applyClusterSpy).not.toHaveBeenCalled();
     });
 
-    test('>= 5 báo cáo → auto duyệt CẢ CỤM pending', async () => {
+    test('>= 3 báo cáo + KHÔNG có sensor → KHÔNG auto-approve (chờ duyệt thủ công)', async () => {
         jest.spyOn(crowdReportAutoApproveRepository, 'getReportForAutoApprove').mockResolvedValue(baseReport);
-        jest.spyOn(crowdReportAutoApproveRepository, 'countNearbyReports').mockResolvedValue(5);
+        jest.spyOn(crowdReportAutoApproveRepository, 'countNearbyReports').mockResolvedValue(4);
         jest.spyOn(sensorRepository, 'findSensorsInRadius').mockResolvedValue([]);
         jest.spyOn(crowdReportAutoApproveRepository, 'updateNearbyCountsInCluster').mockResolvedValue(undefined);
         jest.spyOn(crowdReportAutoApproveRepository, 'updateSensorVerifiedInCluster').mockResolvedValue(undefined);
         const applyClusterSpy = jest
             .spyOn(crowdReportAutoApproveRepository, 'applyAutoApproveCluster')
-            .mockResolvedValue([{ id: 115 }, { id: 116 }, { id: 117 }, { id: 118 }, { id: 119 }]);
+            .mockResolvedValue([]);
 
-        const result = await autoApproveService.checkAutoApprove(119);
+        const result = await autoApproveService.checkAutoApprove(10);
+
+        expect(result.ok).toBe(true);
+        expect(result.nearbyCount).toBe(4);
+        expect(result.sensorVerified).toBe(false);
+        expect(result.autoApproved).toBe(false);
+        expect(applyClusterSpy).not.toHaveBeenCalled();
+    });
+
+    test('>= 3 báo cáo + có sensor xác minh → auto duyệt CẢ CỤM', async () => {
+        jest.spyOn(crowdReportAutoApproveRepository, 'getReportForAutoApprove').mockResolvedValue(baseReport);
+        jest.spyOn(crowdReportAutoApproveRepository, 'countNearbyReports').mockResolvedValue(3);
+        jest.spyOn(sensorRepository, 'findSensorsInRadius').mockResolvedValue([
+            { sensor_id: 'S01', status: 'warning', water_level: 25 }
+        ]);
+        jest.spyOn(crowdReportAutoApproveRepository, 'updateNearbyCountsInCluster').mockResolvedValue(undefined);
+        jest.spyOn(crowdReportAutoApproveRepository, 'updateSensorVerifiedInCluster').mockResolvedValue(undefined);
+        const applyClusterSpy = jest
+            .spyOn(crowdReportAutoApproveRepository, 'applyAutoApproveCluster')
+            .mockResolvedValue([{ id: 10 }, { id: 11 }, { id: 12 }]);
+
+        const result = await autoApproveService.checkAutoApprove(10);
 
         expect(result.autoApproved).toBe(true);
-        expect(result.autoApprovedCount).toBe(5);
-        expect(result.autoApprovedIds).toEqual([115, 116, 117, 118, 119]);
+        expect(result.autoApprovedCount).toBe(3);
+        expect(result.autoApprovedIds).toEqual([10, 11, 12]);
         expect(applyClusterSpy).toHaveBeenCalledWith(10.828, 106.735, 'Mức 3', 150);
     });
 
-    test('>= 5 báo cáo, có sensor → sensor_verified true cho cụm', async () => {
+    test('>= 3 báo cáo + sensor elevated → sensor_verified true, auto-approve', async () => {
         jest.spyOn(crowdReportAutoApproveRepository, 'getReportForAutoApprove').mockResolvedValue(baseReport);
-        jest.spyOn(crowdReportAutoApproveRepository, 'countNearbyReports').mockResolvedValue(6);
+        jest.spyOn(crowdReportAutoApproveRepository, 'countNearbyReports').mockResolvedValue(5);
         jest.spyOn(sensorRepository, 'findSensorsInRadius').mockResolvedValue([
-            { sensor_id: 'S01', status: 'warning', water_level: 25 }
+            { sensor_id: 'S01', status: 'elevated', water_level: 25 }
         ]);
         jest.spyOn(crowdReportAutoApproveRepository, 'updateNearbyCountsInCluster').mockResolvedValue(undefined);
         const updateSensorClusterSpy = jest
@@ -79,6 +104,7 @@ describe('checkAutoApprove', () => {
         const result = await autoApproveService.checkAutoApprove(10);
 
         expect(result.sensorVerified).toBe(true);
+        expect(result.autoApproved).toBe(true);
         expect(updateSensorClusterSpy).toHaveBeenCalledWith(10.828, 106.735, 'Mức 3', true, 150);
     });
 });
@@ -96,6 +122,20 @@ describe('verifySensorInArea', () => {
     test('trả true khi sensor danger', async () => {
         jest.spyOn(sensorRepository, 'findSensorsInRadius').mockResolvedValue([
             { status: 'danger', water_level: 40 }
+        ]);
+        await expect(autoApproveService.verifySensorInArea(10.828, 106.735)).resolves.toBe(true);
+    });
+
+    test('trả true khi sensor elevated', async () => {
+        jest.spyOn(sensorRepository, 'findSensorsInRadius').mockResolvedValue([
+            { status: 'elevated', water_level: 25 }
+        ]);
+        await expect(autoApproveService.verifySensorInArea(10.828, 106.735)).resolves.toBe(true);
+    });
+
+    test('trả true khi sensor critical', async () => {
+        jest.spyOn(sensorRepository, 'findSensorsInRadius').mockResolvedValue([
+            { status: 'critical', water_level: 55 }
         ]);
         await expect(autoApproveService.verifySensorInArea(10.828, 106.735)).resolves.toBe(true);
     });
