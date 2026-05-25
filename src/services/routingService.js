@@ -27,9 +27,9 @@ const ROUTING_LEGACY_FALLBACK = String(process.env.ROUTING_LEGACY_FALLBACK || 't
 const routingRepository = require('../repositories/routingRepository');
 
 const VEHICLE_PROFILES = {
-    motorbike: { name: 'Xe máy', maxWadingDepthCm: 20 },
-    car: { name: 'Ô tô con', maxWadingDepthCm: 30 },
-    suv: { name: 'SUV', maxWadingDepthCm: 50 }
+    motorbike: { name: 'Xe máy', maxWadingDepthCm: 10 },
+    car: { name: 'Ô tô con', maxWadingDepthCm: 20 },
+    suv: { name: 'SUV', maxWadingDepthCm: 40 }
 };
 
 function toFiniteNumber(value) {

@@ -38,7 +38,7 @@ from services.flood_penalty import VehicleProfile  # noqa: E402
 from services.astar import find_path  # noqa: E402
 
 
-MOTORBIKE = VehicleProfile(key="motorbike", name="Xe máy", max_wading_depth_cm=20)
+MOTORBIKE = VehicleProfile(key="motorbike", name="Xe máy", max_wading_depth_cm=10)
 
 
 # ── Helper: dựng đồ thị 5 nút theo bảng cạnh ─────────────────────────────────

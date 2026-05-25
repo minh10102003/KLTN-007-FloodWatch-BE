@@ -20,9 +20,9 @@ class VehicleProfile:
 # ── Vehicle profiles (mirrors Node.js VEHICLE_PROFILES) ──────────────────────
 
 VEHICLE_PROFILES: dict[str, VehicleProfile] = {
-    "motorbike": VehicleProfile(key="motorbike", name="Xe máy", max_wading_depth_cm=20),
-    "car": VehicleProfile(key="car", name="Ô tô con", max_wading_depth_cm=30),
-    "suv": VehicleProfile(key="suv", name="SUV", max_wading_depth_cm=50),
+    "motorbike": VehicleProfile(key="motorbike", name="Xe máy", max_wading_depth_cm=10),
+    "car": VehicleProfile(key="car", name="Ô tô con", max_wading_depth_cm=20),
+    "suv": VehicleProfile(key="suv", name="SUV", max_wading_depth_cm=40),
 }
 
 

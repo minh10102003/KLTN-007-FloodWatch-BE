@@ -17,9 +17,9 @@ from services.flood_penalty import (
 )
 
 
-MOTORBIKE = VEHICLE_PROFILES["motorbike"]  # max 20cm
-CAR = VEHICLE_PROFILES["car"]              # max 30cm
-SUV = VEHICLE_PROFILES["suv"]              # max 50cm
+MOTORBIKE = VEHICLE_PROFILES["motorbike"]  # max 10cm
+CAR = VEHICLE_PROFILES["car"]              # max 20cm
+SUV = VEHICLE_PROFILES["suv"]              # max 40cm
 
 
 def test_flood_penalty_no_flood():
@@ -29,19 +29,19 @@ def test_flood_penalty_no_flood():
 
 def test_flood_penalty_light():
     """Depth ≤ 50% max → 1.5x"""
-    assert flood_penalty(5, 20) == 1.5    # 5 ≤ 10 (50% of 20)
-    assert flood_penalty(10, 20) == 1.5   # exactly 50%
+    assert flood_penalty(3, 10) == 1.5    # 3 ≤ 5 (50% of 10)
+    assert flood_penalty(5, 10) == 1.5    # exactly 50%
 
 
 def test_flood_penalty_heavy():
     """Depth > 50% and ≤ 100% max → gradient between 5.0 and 8.0"""
-    p = flood_penalty(15, 20)  # 75% of max
+    p = flood_penalty(8, 10)  # 80% of max
     assert 5.0 < p < 8.0  # gradient penalty
 
 
 def test_flood_penalty_blocked():
     """Depth > max → infinity"""
-    assert flood_penalty(25, 20) == math.inf
+    assert flood_penalty(15, 10) == math.inf
 
 
 def test_road_class_factor():
@@ -63,7 +63,7 @@ def test_compute_edge_cost_dry():
 
 def test_compute_edge_cost_blocked():
     cost, blocked, near_limit = compute_edge_cost(
-        length_m=100, speed_limit_mps=10, flood_depth_cm=25,
+        length_m=100, speed_limit_mps=10, flood_depth_cm=15,
         vehicle=MOTORBIKE, is_dry=False,
     )
     assert math.isinf(cost)
@@ -72,8 +72,8 @@ def test_compute_edge_cost_blocked():
 
 def test_compute_edge_cost_near_limit():
     cost, blocked, near_limit = compute_edge_cost(
-        length_m=100, speed_limit_mps=10, flood_depth_cm=15,
-        vehicle=MOTORBIKE, is_dry=False,  # 15 > 50% of 20 → penalty ≥ 5.0
+        length_m=100, speed_limit_mps=10, flood_depth_cm=8,
+        vehicle=MOTORBIKE, is_dry=False,  # 8 > 50% of 10 → penalty ≥ 5.0
     )
     assert not blocked
     assert near_limit
@@ -91,9 +91,9 @@ def test_parse_vehicle_type():
 
 
 def test_vehicle_profiles_data():
-    assert MOTORBIKE.max_wading_depth_cm == 20
-    assert CAR.max_wading_depth_cm == 30
-    assert SUV.max_wading_depth_cm == 50
+    assert MOTORBIKE.max_wading_depth_cm == 10
+    assert CAR.max_wading_depth_cm == 20
+    assert SUV.max_wading_depth_cm == 40
 
 
 if __name__ == "__main__":

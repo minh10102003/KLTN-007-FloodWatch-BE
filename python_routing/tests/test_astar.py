@@ -84,8 +84,8 @@ def _make_snapshot(edges_data: list[dict]) -> GraphSnapshot:
     return snap
 
 
-MOTORBIKE = VehicleProfile(key="motorbike", name="Xe máy", max_wading_depth_cm=20)
-SUV = VehicleProfile(key="suv", name="SUV", max_wading_depth_cm=50)
+MOTORBIKE = VehicleProfile(key="motorbike", name="Xe máy", max_wading_depth_cm=10)
+SUV = VehicleProfile(key="suv", name="SUV", max_wading_depth_cm=40)
 
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
@@ -125,7 +125,7 @@ def test_avoids_blocked_edge():
 
 
 def test_suv_passes_where_motorbike_cant():
-    """SUV (50cm max) can pass through 30cm flood, motorbike (20cm) can't."""
+    """SUV (40cm max) can pass through 30cm flood, motorbike (10cm) can't."""
     snap = _make_snapshot([
         {"id": 1, "from": 1, "to": 2, "length_m": 100, "flood": 30},
     ])
