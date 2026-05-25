@@ -143,11 +143,13 @@ const options = {
                         installation_date: { type: 'string', format: 'date' },
                         installation_height: { type: 'number', example: 150 },
                         is_active: { type: 'boolean', example: true },
-                        status: { type: 'string', enum: ['normal', 'warning', 'danger', 'offline'], example: 'normal' },
+                        status: { type: 'string', enum: ['normal', 'warning', 'elevated', 'danger', 'critical', 'offline'], example: 'normal', description: '5 mức cảnh báo: normal (<10cm), warning (10-20), elevated (20-30), danger (30-50), critical (≥50)' },
                         lng: { type: 'number', example: 106.721 },
                         lat: { type: 'number', example: 10.798 },
-                        warning_threshold: { type: 'number', example: 10 },
-                        danger_threshold: { type: 'number', example: 30 }
+                        warning_threshold: { type: 'number', example: 10, description: 'Ngưỡng Mức 2 (vàng)' },
+                        elevated_threshold: { type: 'number', example: 20, description: 'Ngưỡng Mức 3 (cam)' },
+                        danger_threshold: { type: 'number', example: 30, description: 'Ngưỡng Mức 4 (đỏ)' },
+                        critical_threshold: { type: 'number', example: 50, description: 'Ngưỡng Mức 5 (đỏ sẫm)' }
                     }
                 },
                 FloodData: {
@@ -157,11 +159,13 @@ const options = {
                         location_name: { type: 'string', example: 'Cầu Sài Gòn - Bình Thạnh' },
                         water_level: { type: 'number', example: 5.5 },
                         velocity: { type: 'number', example: 0.2 },
-                        status: { type: 'string', enum: ['normal', 'warning', 'danger', 'offline'] },
+                        status: { type: 'string', enum: ['normal', 'warning', 'elevated', 'danger', 'critical', 'offline'], description: '5 mức cảnh báo: normal (<10cm), warning (10-20), elevated (20-30), danger (30-50), critical (≥50)' },
                         lng: { type: 'number', example: 106.721 },
                         lat: { type: 'number', example: 10.798 },
-                        warning_threshold: { type: 'number', example: 10 },
-                        danger_threshold: { type: 'number', example: 30 },
+                        warning_threshold: { type: 'number', example: 10, description: 'Ngưỡng Mức 2 (vàng)' },
+                        elevated_threshold: { type: 'number', example: 20, description: 'Ngưỡng Mức 3 (cam)' },
+                        danger_threshold: { type: 'number', example: 30, description: 'Ngưỡng Mức 4 (đỏ)' },
+                        critical_threshold: { type: 'number', example: 50, description: 'Ngưỡng Mức 5 (đỏ sẫm)' },
                         temperature: { type: 'number', nullable: true, description: 'Nhiệt độ °C (DHT22)', example: 28.5 },
                         humidity: { type: 'number', nullable: true, description: 'Độ ẩm % (DHT22)', example: 65 }
                     }
@@ -171,7 +175,7 @@ const options = {
                     properties: {
                         id: { type: 'integer', example: 1 },
                         sensor_id: { type: 'string', example: 'S01' },
-                        alert_type: { type: 'string', enum: ['warning', 'danger', 'offline', 'velocity_spike'] },
+                        alert_type: { type: 'string', enum: ['warning', 'elevated', 'danger', 'critical', 'offline', 'velocity_spike'] },
                         severity: { type: 'string', enum: ['low', 'medium', 'high', 'critical'] },
                         message: { type: 'string', example: 'Cảnh báo ngập lụt...' },
                         water_level: { type: 'number', example: 35.5 },

@@ -1,4 +1,5 @@
 const floodModel = require('../models/floodModel');
+const { DEFAULT_THRESHOLDS } = require('../services/floodStatusService');
 
 const floodController = {
     // Lấy tất cả dữ liệu ngập lụt để hiển thị lên bản đồ (API cũ - giữ để tương thích)
@@ -46,8 +47,10 @@ const floodController = {
                     status: finalStatus,
                     lng: parseFloat(item.lng),
                     lat: parseFloat(item.lat),
-                    warning_threshold: item.warning_threshold || 10,
-                    danger_threshold: item.danger_threshold || 30,
+                    warning_threshold: item.warning_threshold || DEFAULT_THRESHOLDS.warning_threshold,
+                    elevated_threshold: item.elevated_threshold || DEFAULT_THRESHOLDS.elevated_threshold,
+                    danger_threshold: item.danger_threshold || DEFAULT_THRESHOLDS.danger_threshold,
+                    critical_threshold: item.critical_threshold || DEFAULT_THRESHOLDS.critical_threshold,
                     last_data_time: item.last_data_time,
                     created_at: item.created_at,
                     temperature: isOffline ? null : (item.temperature != null ? parseFloat(item.temperature) : null),

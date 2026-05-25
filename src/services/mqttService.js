@@ -120,8 +120,9 @@ function emergencyCooldownMinutes() {
     return Math.min(1440, Math.max(5, parseInt(process.env.EMERGENCY_ALERT_COOLDOWN_MINUTES || '20', 10)));
 }
 
-/** Loại cảnh báo cho dedupe: danger vs warning + vận tốc cao */
+/** Loại cảnh báo cho dedupe: critical/danger vs elevated + vận tốc cao */
 function buildEmergencyAlertKind(status) {
+    if (status === 'critical') return 'critical';
     if (status === 'danger') return 'danger';
     return 'warning_velocity';
 }
@@ -232,7 +233,7 @@ const init = () => {
             }
             
             // 8. Tạo alert nếu vượt ngưỡng (trigger sẽ tự động tạo alert, nhưng có thể gửi thông báo khẩn)
-            if (status === 'danger' || (status === 'warning' && velocity && velocity > 5)) {
+            if (status === 'critical' || status === 'danger' || (status === 'elevated' && velocity && velocity > 5)) {
                 try {
                     if (sensor) {
                         // Tìm users cần nhận cảnh báo trong bán kính
@@ -281,7 +282,7 @@ const init = () => {
                                     }
                                 }
                                 const dangerTelegramEveryReading =
-                                    alertKind === 'danger' && methods.includes('telegram');
+                                    (alertKind === 'danger' || alertKind === 'critical') && methods.includes('telegram');
                                 if (skipSend && !dangerTelegramEveryReading) {
                                     console.log(
                                         `🔁 [Alert] Cooldown skip user=${subscriber.user_id} sensor=${sensor_id} kind=${alertKind} (${cooldownMin}m)`

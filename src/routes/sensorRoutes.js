@@ -20,7 +20,7 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
  *         name: status
  *         schema:
  *           type: string
- *           enum: [normal, warning, danger, offline]
+ *           enum: [normal, warning, elevated, danger, critical, offline]
  *         description: Lọc theo trạng thái
  *         example: normal
  *       - in: query

@@ -14,7 +14,7 @@ const floodController = require('../controllers/floodController');
  *         name: status
  *         schema:
  *           type: string
- *           enum: [normal, warning, danger, offline]
+ *           enum: [normal, warning, elevated, danger, critical, offline]
  *         description: Lọc theo trạng thái
  *         example: warning
  *       - in: query
@@ -126,7 +126,7 @@ router.get('/v1/flood-data', floodController.getFloodData);
  *         name: status
  *         schema:
  *           type: string
- *           enum: [normal, warning, danger, offline]
+ *           enum: [normal, warning, elevated, danger, critical, offline]
  *         description: Lọc theo trạng thái
  *         example: warning
  *       - in: query
