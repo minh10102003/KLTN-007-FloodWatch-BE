@@ -2,6 +2,7 @@ const crowdReportModel = require('../models/crowdReportModel');
 const userModel = require('../models/userModel');
 const { mapFloodLevel, VALID_LEVELS, getFloodLevelLabel } = require('../utils/floodLevelMapper');
 const { emitAdminNotification } = require('../socket/adminSocket');
+const { emitMapUpdate } = require('../socket/mapSocket');
 const { getModerationDisplay, getValidationDisplay } = require('../utils/reportDisplayStatus');
 
 /**
@@ -82,6 +83,7 @@ async function submitCrowdReport({ user, body }) {
         type: 'report_pending',
         reportId: result.id
     });
+    emitMapUpdate('report_changed');
 
     const moderationStatus = result.moderation_status || 'pending';
     const reportForDisplay = {

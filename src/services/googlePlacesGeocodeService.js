@@ -191,6 +191,32 @@ async function geocodeForward(address) {
     return data;
 }
 
+/**
+ * Geocoding reverse (lat/lng -> địa chỉ).
+ */
+async function geocodeReverse(lat, lng) {
+    const key = getApiKey();
+    if (!key) {
+        throw new Error('Chưa cấu hình GOOGLE_PLACES_API_KEY hoặc GOOGLE_GEOCODING_API_KEY');
+    }
+    const params = {
+        latlng: `${Number(lat)},${Number(lng)}`,
+        key,
+        language: 'vi',
+        region: 'vn'
+    };
+    const url = buildUrl('/geocode/json', params);
+    const rsp = await fetch(url);
+    const text = await rsp.text();
+    let data;
+    try {
+        data = JSON.parse(text);
+    } catch {
+        throw new Error(`Google Reverse Geocoding: phản hồi không phải JSON (${rsp.status})`);
+    }
+    return data;
+}
+
 function mapPrediction(p) {
     if (!p) return null;
     return {
@@ -343,6 +369,7 @@ module.exports = {
     placeAutocomplete,
     placeDetails,
     geocodeForward,
+    geocodeReverse,
     resolveAddressToCoords,
     mapPrediction
 };

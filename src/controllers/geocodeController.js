@@ -180,6 +180,50 @@ const geocodeController = {
                 error: err.message || 'Lỗi geocode địa chỉ'
             });
         }
+    },
+
+    /**
+     * GET /api/v1/geocode/reverse?lat=...&lng=...
+     * Reverse geocode ổn định cho FE mobile.
+     */
+    reverse: async (req, res) => {
+        try {
+            const lat = parseNum(req.query.lat);
+            const lng = parseNum(req.query.lng);
+            if (lat == null || lng == null) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Thiếu hoặc sai query: lat, lng'
+                });
+            }
+            if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'lat/lng ngoài phạm vi hợp lệ'
+                });
+            }
+
+            const data = await googlePlacesGeocodeService.geocodeReverse(lat, lng);
+            if (data.status === 'REQUEST_DENIED' || data.status === 'INVALID_REQUEST') {
+                return res.status(502).json({
+                    success: false,
+                    error: data.error_message || `Google Geocoding: ${data.status}`
+                });
+            }
+
+            const first = Array.isArray(data.results) ? data.results[0] : null;
+            const address = first?.formatted_address || null;
+            return res.json({
+                success: true,
+                data: { address }
+            });
+        } catch (err) {
+            console.error('[geocode/reverse]', err.message);
+            return res.status(500).json({
+                success: false,
+                error: err.message || 'Lỗi reverse geocode'
+            });
+        }
     }
 };
 

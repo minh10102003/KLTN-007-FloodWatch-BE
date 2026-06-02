@@ -18,5 +18,6 @@ const geocodeLimiter = rateLimit({
 router.get('/search', geocodeLimiter, geocodeController.search);
 router.get('/place', geocodeLimiter, geocodeController.place);
 router.get('/forward', geocodeLimiter, geocodeController.forward);
+router.get('/reverse', geocodeLimiter, geocodeController.reverse);
 
 module.exports = router;

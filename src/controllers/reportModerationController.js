@@ -5,6 +5,7 @@ const { withFullPhotoUrls } = require('../utils/photoUrl');
 const { withReportConfidence } = require('../utils/reportConfidence');
 const { withReportDisplayStatus } = require('../utils/reportDisplayStatus');
 const { emitAdminNotification } = require('../socket/adminSocket');
+const { emitMapUpdate } = require('../socket/mapSocket');
 
 function enrichReportRows(req, data) {
     return withFullPhotoUrls(req, withReportDisplayStatus(withReportConfidence(data)));
@@ -127,6 +128,7 @@ const reportModerationController = {
             } else {
                 emitAdminNotification({ type: 'report_rejected', reportId: reportIdNum });
             }
+            emitMapUpdate('report_changed');
 
             res.json({
                 success: true,

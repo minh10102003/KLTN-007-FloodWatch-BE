@@ -8,6 +8,7 @@ const emergencyAlertSendLogRepository = require('../repositories/emergencyAlertS
 const emergencyNotificationService = require('./emergencyNotificationService');
 const { determineStatusFromLevel } = require('./floodStatusService');
 const { emitAdminNotification } = require('../socket/adminSocket');
+const { emitMapUpdate } = require('../socket/mapSocket');
 
 /** Khoảng cách thô từ node (cm) — chỉ lưu DB, không dùng tính mực nước. */
 const parseRawDistance = (value) => {
@@ -336,6 +337,7 @@ const init = () => {
             const tempStr = temperature != null ? `, temp: ${parseFloat(temperature).toFixed(1)}°C` : '';
             const humStr = humidity != null ? `, humidity: ${parseFloat(humidity).toFixed(0)}%` : '';
             console.log(`💾 [Data] ${sensor_id}: ${waterLevel.toFixed(2)}cm (${status})${velocity !== null ? `, velocity: ${velocity}cm/min` : ''}${tempStr}${humStr}`);
+            emitMapUpdate('sensor_changed');
         } catch (err) {
             console.error('❌ [MQTT] Error processing data:', err.message);
         }
